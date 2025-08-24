@@ -1,6 +1,9 @@
-package dev.kuku.vfl.internal.models;
+package dev.kuku.vfl.internal.dto;
 
+import dev.kuku.vfl.internal.models.Block;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -8,11 +11,10 @@ public class BlockContext {
     private final Block block;
     private final AtomicBoolean firstLogPushed = new AtomicBoolean(false);
 
-    public void setCurrentLogId(@MonotonicNonNull String currentLogId) {
+    public void setCurrentLogId(@NonNull String currentLogId) {
         this.currentLogId = currentLogId;
     }
-
-    public @MonotonicNonNull String getCurrentLogId() {
+    public @Nullable String getCurrentLogId() {
         return currentLogId;
     }
 
@@ -24,8 +26,8 @@ public class BlockContext {
         return block;
     }
 
-    @MonotonicNonNull
-    private String currentLogId = null;
+
+    private @MonotonicNonNull String currentLogId = null;
 
     public BlockContext(Block block) {
         this.block = block;
