@@ -16,6 +16,7 @@ public class Logger {
         AnnotationData ad = AnnotationData.instance;
         if (ad == null) {
             log.error("AnnotationData not initialized! Setup ${VFLAnnotation.class.getSimpleName()} if before using VFL.");
+            return;
         }
         Stack<BlockContext> threadContextStack = ad.threadContextStack.get();
         if (threadContextStack == null || threadContextStack.isEmpty()) {
@@ -33,6 +34,7 @@ public class Logger {
         AnnotationData ad = AnnotationData.instance;
         if (ad == null) {
             log.error("AnnotationData not initialized! Setup ${VFLAnnotation.class.getSimpleName()} if before using VFL.");
+            return;
         }
         Stack<BlockContext> threadContextStack = ad.threadContextStack.get();
         if (threadContextStack == null || threadContextStack.isEmpty()) {
@@ -50,6 +52,7 @@ public class Logger {
         AnnotationData ad = AnnotationData.instance;
         if (ad == null) {
             log.error("AnnotationData not initialized! Setup ${VFLAnnotation.class.getSimpleName()} if before using VFL.");
+            return;
         }
         Stack<BlockContext> threadContextStack = ad.threadContextStack.get();
         if (threadContextStack == null || threadContextStack.isEmpty()) {
