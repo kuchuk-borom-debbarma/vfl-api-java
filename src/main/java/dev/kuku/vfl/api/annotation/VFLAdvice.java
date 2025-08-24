@@ -1,6 +1,5 @@
-package dev.kuku.vfl.api.annotation.internal;
+package dev.kuku.vfl.api.annotation;
 
-import dev.kuku.vfl.api.annotation.AnnotationData;
 import dev.kuku.vfl.internal.buffer.VFLBuffer;
 import dev.kuku.vfl.internal.dto.BlockContext;
 import dev.kuku.vfl.internal.models.Block;
@@ -19,26 +18,29 @@ import java.util.Stack;
  */
 public final class VFLAdvice {
     public static final Logger log = LoggerFactory.getLogger(VFLAdvice.class);
+    public static VFLAdvice instance = new VFLAdvice();
 
     private VFLAdvice() {
     }
 
     @Advice.OnMethodEnter
     public static void onSubBlockEntered(@Advice.Origin Method method, @Advice.AllArguments Object[] args) {
+        instance.methodEntered(method, args);
+    }
+
+    public static void onSubBlockExited(@Advice.Origin Method method, @Advice.AllArguments Object[] args, @Advice.Thrown Throwable throwable) {
+        instance.methodExited(method, args, throwable);
+    }
+
+    public void methodEntered(@Advice.Origin Method method, @Advice.AllArguments Object[] args) {
         //Validation
-        AnnotationData annotationData = AnnotationData.instance;
-        if (annotationData == null) {
-            log.error("AnnotationData has not been initialized!");
-            return;
-        }
-        Stack<BlockContext> threadContextStack = annotationData.threadContextStack.get();
+        Stack<BlockContext> threadContextStack = VFLAnnotation.threadContextStack.get();
         if (threadContextStack == null || threadContextStack.isEmpty()) {
             log.error("Sub block method called without parent block context!");
             return;
         }
         BlockContext parentBlockContext = threadContextStack.peek();
-        VFLBuffer buffer = annotationData.buffer;
-
+        VFLBuffer buffer = VFLAnnotation.buffer;
         //Create sub block for the method
         Block subBlock = new Block(method.getName());
         buffer.pushBlock(subBlock);
@@ -53,14 +55,9 @@ public final class VFLAdvice {
         buffer.pushBlockEntered(subBlock.getId());
     }
 
-    public static void onSubBlockExited(@Advice.Origin Method method, @Advice.AllArguments Object[] args, @Advice.Thrown Throwable throwable) {
+    public void methodExited(@Advice.Origin Method method, @Advice.AllArguments Object[] args, @Advice.Thrown Throwable throwable) {
         //Validation
-        AnnotationData annotationData = AnnotationData.instance;
-        if (annotationData == null) {
-            log.error("AnnotationData has not been initialized!");
-            return;
-        }
-        Stack<BlockContext> threadContextStack = annotationData.threadContextStack.get();
+        Stack<BlockContext> threadContextStack = VFLAnnotation.threadContextStack.get();
         if (threadContextStack == null || threadContextStack.isEmpty()) {
             log.error("Sub block method exited without parent block context!");
             return;
@@ -70,13 +67,13 @@ public final class VFLAdvice {
         //If exception was thrown, log it
         if (throwable != null) {
             BlockLog errorLog = new BlockLog("Exception : ${throwable.getMessage()}", subBlockContext.getCurrentLogId(), LogTypeBase.ERROR);
-            annotationData.buffer.pushLog(errorLog);
+            VFLAnnotation.buffer.pushLog(errorLog);
             //Set the error log as the next step of the current block
             subBlockContext.setCurrentLogId(errorLog.getId());
         }
         //Notify buffer that we sub block has exited
-        annotationData.buffer.pushBlockExited(subBlockContext.getBlock().getId());
-        //Notify buffer that the block has returned to it's parent. This ALWAYS comes after exit.
-        annotationData.buffer.pushBlockReturned(subBlockContext.getBlock().getId());
+        VFLAnnotation.buffer.pushBlockExited(subBlockContext.getBlock().getId());
+        //Notify buffer that the block has returned to its parent. This ALWAYS comes after exit.
+        VFLAnnotation.buffer.pushBlockReturned(subBlockContext.getBlock().getId());
     }
 }
