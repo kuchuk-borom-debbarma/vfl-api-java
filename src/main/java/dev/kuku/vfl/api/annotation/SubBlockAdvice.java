@@ -16,11 +16,11 @@ import java.util.Stack;
 /**
  * Internal ByteBuddy advice class injected into methods annotated with {@link dev.kuku.vfl.api.annotation.SubBlock}.
  */
-public final class VFLAdvice {
-    public static final Logger log = LoggerFactory.getLogger(VFLAdvice.class);
-    public static VFLAdvice instance = new VFLAdvice();
+public final class SubBlockAdvice {
+    public static final Logger log = LoggerFactory.getLogger(SubBlockAdvice.class);
+    public static SubBlockAdvice instance = new SubBlockAdvice();
 
-    private VFLAdvice() {
+    private SubBlockAdvice() {
     }
 
     @Advice.OnMethodEnter
@@ -41,6 +41,10 @@ public final class VFLAdvice {
         }
         BlockContext parentBlockContext = threadContextStack.peek();
         VFLBuffer buffer = VFLAnnotation.buffer;
+        if (buffer == null) {
+            log.error("Sub block method called but buffer is null!");
+            return;
+        }
         //Create sub block for the method
         Block subBlock = new Block(method.getName());
         buffer.pushBlock(subBlock);
@@ -66,14 +70,25 @@ public final class VFLAdvice {
         BlockContext subBlockContext = threadContextStack.pop();
         //If exception was thrown, log it
         if (throwable != null) {
+            VFLBuffer buffer = VFLAnnotation.buffer;
+            if (buffer == null) {
+                log.error("Sub block method exited but buffer is null!");
+                return;
+            }
             BlockLog errorLog = new BlockLog("Exception : ${throwable.getMessage()}", subBlockContext.getCurrentLogId(), LogTypeBase.ERROR);
-            VFLAnnotation.buffer.pushLog(errorLog);
+            buffer.pushLog(errorLog);
             //Set the error log as the next step of the current block
             subBlockContext.setCurrentLogId(errorLog.getId());
+            buffer.pushBlockExited(subBlockContext.getBlock().getId());
+            buffer.pushBlockReturned(subBlockContext.getBlock().getId());
+        } else {
+            VFLBuffer buffer = VFLAnnotation.buffer;
+            if (buffer == null) {
+                log.error("Sub block method exited but buffer is null!");
+                return;
+            }
+            buffer.pushBlockExited(subBlockContext.getBlock().getId());
+            buffer.pushBlockReturned(subBlockContext.getBlock().getId());
         }
-        //Notify buffer that we sub block has exited
-        VFLAnnotation.buffer.pushBlockExited(subBlockContext.getBlock().getId());
-        //Notify buffer that the block has returned to its parent. This ALWAYS comes after exit.
-        VFLAnnotation.buffer.pushBlockReturned(subBlockContext.getBlock().getId());
     }
 }

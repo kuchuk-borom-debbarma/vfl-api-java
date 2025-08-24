@@ -15,14 +15,11 @@ import java.lang.instrument.Instrumentation;
 import java.util.Stack;
 
 public class VFLAnnotation extends VFLBase {
+    //TODO Publish event block method that will return publisher context
+    //TODO Remote block create method that will return remote block context
     static final ThreadLocal<@Nullable Stack<BlockContext>> threadContextStack = new ThreadLocal<>();
     private static final Logger log = LoggerFactory.getLogger(VFLAnnotation.class);
-    static VFLBuffer buffer;
-
-    public VFLAnnotation(VFLBuffer buffer) {
-        VFLAnnotation.buffer = buffer;
-    }
-
+    static @Nullable VFLBuffer buffer = null;
     @Override
     protected @Nullable BlockContext getBlockContext() {
         final @Nullable Stack<BlockContext> stack = threadContextStack.get();
@@ -38,11 +35,11 @@ public class VFLAnnotation extends VFLBase {
     }
 
     @Override
-    protected VFLBuffer getVFLBuffer() {
+    protected @Nullable VFLBuffer getVFLBuffer() {
         return VFLAnnotation.buffer;
     }
 
-    public static synchronized void initialize(VFLBuffer buffer) {
+    public static synchronized void initialize(@Nullable VFLBuffer buffer) {
         VFLAnnotation.buffer = buffer;
         try {
             // Attach ByteBuddy agent to JVM
@@ -56,7 +53,7 @@ public class VFLAnnotation extends VFLBase {
                     .transform((builder, typeDescription, classLoader, javaModule, protectionDomain) -> {
                         log.debug("[VFL] Attempting to instrument: {}", typeDescription.getName());
                         return builder.visit(
-                                Advice.to(VFLAdvice.class)
+                                Advice.to(SubBlockAdvice.class)
                                         .on(ElementMatchers.isAnnotatedWith(SubBlock.class)
                                                 .and(ElementMatchers.not(ElementMatchers.isAbstract())))
                         );

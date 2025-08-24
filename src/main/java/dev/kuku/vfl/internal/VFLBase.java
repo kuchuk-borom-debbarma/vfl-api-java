@@ -15,7 +15,7 @@ public abstract class VFLBase {
     protected abstract @Nullable BlockContext getBlockContext();
 
     protected
-    abstract VFLBuffer getVFLBuffer();
+    abstract @Nullable VFLBuffer getVFLBuffer();
 
     public void info(String message, Object... args) {
         BlockContext ctx = getBlockContext();
@@ -24,6 +24,10 @@ public abstract class VFLBase {
             return;
         }
         VFLBuffer buffer = getVFLBuffer();
+        if (buffer == null) {
+            log.warn("Failed to log. Buffer is null!");
+            return;
+        }
         String msg = FormatMessage(message, args);
         BlockLog log = new BlockLog(msg, ctx.getCurrentLogId(), LogTypeBase.INFO);
         buffer.pushLog(log);
@@ -37,6 +41,10 @@ public abstract class VFLBase {
             return;
         }
         VFLBuffer buffer = getVFLBuffer();
+        if (buffer == null) {
+            log.warn("Failed to log. Buffer is null!");
+            return;
+        }
         String msg = FormatMessage(message, args);
         BlockLog logEntry = new BlockLog(msg, ctx.getCurrentLogId(), LogTypeBase.WARN);
         buffer.pushLog(logEntry);
@@ -50,6 +58,10 @@ public abstract class VFLBase {
             return;
         }
         VFLBuffer buffer = getVFLBuffer();
+        if (buffer == null) {
+            log.warn("Failed to log. Buffer is null!");
+            return;
+        }
         String msg = FormatMessage(message, args);
         BlockLog logEntry = new BlockLog(msg, ctx.getCurrentLogId(), LogTypeBase.ERROR);
         buffer.pushLog(logEntry);
