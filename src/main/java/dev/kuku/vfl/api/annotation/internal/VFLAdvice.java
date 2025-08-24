@@ -6,7 +6,7 @@ import dev.kuku.vfl.internal.dto.BlockContext;
 import dev.kuku.vfl.internal.models.Block;
 import dev.kuku.vfl.internal.models.BlockLog;
 import dev.kuku.vfl.internal.models.logType.LogTypeBase;
-import dev.kuku.vfl.internal.models.logType.LogTypeReferencedBlock;
+import dev.kuku.vfl.internal.models.logType.LogTypeTraceBlock;
 import net.bytebuddy.asm.Advice;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,7 +43,7 @@ public final class VFLAdvice {
         Block subBlock = new Block(method.getName());
         buffer.pushBlock(subBlock);
         //Create sub block start log for current block's context
-        BlockLog subBlockStartLog = new BlockLog(null, parentBlockContext.getCurrentLogId(), subBlock.getId(), LogTypeReferencedBlock.PRIMARY_BLOCK_START);
+        BlockLog subBlockStartLog = new BlockLog(null, parentBlockContext.getCurrentLogId(), subBlock.getId(), LogTypeTraceBlock.LINEAR_TRACE);
         buffer.pushLog(subBlockStartLog);
         //Set the sub block start log as the next step of the current block
         parentBlockContext.setCurrentLogId(subBlockStartLog.getId());

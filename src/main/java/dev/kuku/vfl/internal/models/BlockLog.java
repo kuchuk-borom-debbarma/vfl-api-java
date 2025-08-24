@@ -1,7 +1,7 @@
 package dev.kuku.vfl.internal.models;
 
 import dev.kuku.vfl.internal.models.logType.LogTypeBase;
-import dev.kuku.vfl.internal.models.logType.LogTypeReferencedBlock;
+import dev.kuku.vfl.internal.models.logType.LogTypeTraceBlock;
 import io.github.robsonkades.uuidv7.UUIDv7;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -46,7 +46,7 @@ public class BlockLog {
         this.type = type.name();
     }
 
-    public BlockLog(@Nullable String message, @Nullable String parentLogId, String referencedBlockId, LogTypeReferencedBlock type) {
+    public BlockLog(@Nullable String message, @Nullable String parentLogId, String referencedBlockId, LogTypeTraceBlock type) {
         String id = UUIDv7.randomUUID().toString();
         this.id = id;
         this.parentLogId = parentLogId;

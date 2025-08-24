@@ -12,14 +12,8 @@ public class AnnotationData {
     public final ThreadLocal<@Nullable Stack<BlockContext>> threadContextStack;
     public final VFLBuffer buffer;
 
-    public AnnotationData(VFLBuffer buffer) {
+    AnnotationData(VFLBuffer buffer) {
         this.threadContextStack = new ThreadLocal<>();
         this.buffer = buffer;
-    }
-
-    public static void Init(VFLBuffer buffer) {
-        if (instance == null) {
-            instance = new AnnotationData(buffer);
-        }
     }
 }
