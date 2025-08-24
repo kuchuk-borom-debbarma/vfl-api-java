@@ -1,6 +1,8 @@
 package dev.kuku.vfl.internal.models;
 
 
+import io.github.robsonkades.uuidv7.UUIDv7;
+
 import java.time.Instant;
 
 public class Block {
@@ -11,8 +13,8 @@ public class Block {
 //    private final Long enteredTime;
 //    private final Long exitedTime;
 
-    public Block(String id, String name) {
-        this.id = id;
+    public Block(String name) {
+        this.id = UUIDv7.randomUUID().toString();
         this.name = name;
         this.createdTime = Instant.now().toEpochMilli();
     }

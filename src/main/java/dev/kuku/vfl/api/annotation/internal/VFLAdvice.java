@@ -1,80 +1,82 @@
 package dev.kuku.vfl.api.annotation.internal;
 
-import dev.kuku.vfl.api.VFLInitializer;
+import dev.kuku.vfl.api.annotation.AnnotationData;
+import dev.kuku.vfl.internal.buffer.VFLBuffer;
 import dev.kuku.vfl.internal.dto.BlockContext;
 import dev.kuku.vfl.internal.models.Block;
 import dev.kuku.vfl.internal.models.BlockLog;
+import dev.kuku.vfl.internal.models.logType.LogTypeBase;
 import dev.kuku.vfl.internal.models.logType.LogTypeReferencedBlock;
-import dev.kuku.vfl.api.dataProvider.VFLAnnotationDataProvider;
-import dev.kuku.vfl.internal.dataProvider.VFLDataProvider;
-import dev.kuku.vfl.internal.util.FlowUtil;
 import net.bytebuddy.asm.Advice;
-import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
+import java.util.Stack;
 
+/**
+ * Internal ByteBuddy advice class injected into methods annotated with {@link dev.kuku.vfl.api.annotation.SubBlock}.
+ */
 public final class VFLAdvice {
     public static final Logger log = LoggerFactory.getLogger(VFLAdvice.class);
-    public static final @MonotonicNonNull VFLDataProvider PROVIDER = VFLInitializer.DATA_PROVIDER;
 
     private VFLAdvice() {
     }
 
     @Advice.OnMethodEnter
     public static void onSubBlockEntered(@Advice.Origin Method method, @Advice.AllArguments Object[] args) {
-        if (PROVIDER == null) {
-            log.error("VFLInitializer.Init() has not been invoked! Please initialize VFL before using it.");
+        //Validation
+        AnnotationData annotationData = AnnotationData.instance;
+        if (annotationData == null) {
+            log.error("AnnotationData has not been initialized!");
             return;
         }
-        if (!(PROVIDER instanceof VFLAnnotationDataProvider)) {
-            log.error("VFL Initializer's VFLData dataProvider is NOT of type {}. It is mandatory to use {} for @{} to function.",
-                    VFLAnnotationDataProvider.class.getSimpleName(),
-                    VFLAnnotationDataProvider.class.getSimpleName(),
-                    dev.kuku.vfl.api.annotation.SubBlock.class.getSimpleName());
+        Stack<BlockContext> threadContextStack = annotationData.threadContextStack.get();
+        if (threadContextStack == null || threadContextStack.isEmpty()) {
+            log.error("Sub block method called without parent block context!");
             return;
         }
-        VFLAnnotationDataProvider annotationDataProvider = (VFLAnnotationDataProvider) PROVIDER;
-        BlockContext parentContext = PROVIDER.getBlockContext();
-        if (parentContext == null) {
-            log.warn("No parent block context found for method: {}. Cannot create sub-block", method.getName());
-            return;
-        }
-        Block subBlock = FlowUtil.CreateBlockAndPushToBuffer(method.getName());
-        if (subBlock == null) {
-            log.error("Failed to push sub-block to buffer for method: {}", method.getName());
-            return;
-        }
-        BlockLog subBlockStartLog = FlowUtil.CreateLogForContextAndPush2Buffer("Starting sub block: " + method.getName(), subBlock.getId(), LogTypeReferencedBlock.PRIMARY_BLOCK_START);
-        if (subBlockStartLog == null) {
-            log.error("Failed to push sub-block start to buffer for subBlock {} in method: {}", subBlock.getId(), method.getName());
-            return;
-        }
-        parentContext.setCurrentLogId(subBlockStartLog.getId());
-        FlowUtil.PushBlockEnteredToBuffer(subBlock.getId());
-        BlockContext subBlockContext = new BlockContext(subBlock);
-        annotationDataProvider.pushBlockContextToThreadLocalStack(subBlockContext);
+        BlockContext parentBlockContext = threadContextStack.peek();
+        VFLBuffer buffer = annotationData.buffer;
+
+        //Create sub block for the method
+        Block subBlock = new Block(method.getName());
+        buffer.pushBlock(subBlock);
+        //Create sub block start log for current block's context
+        BlockLog subBlockStartLog = new BlockLog(null, parentBlockContext.getCurrentLogId(), subBlock.getId(), LogTypeReferencedBlock.PRIMARY_BLOCK_START);
+        buffer.pushLog(subBlockStartLog);
+        //Set the sub block start log as the next step of the current block
+        parentBlockContext.setCurrentLogId(subBlockStartLog.getId());
+        //Push the new block context onto the stack, since now this method is the one being invoked so all logs will be for this block context
+        threadContextStack.push(new BlockContext(subBlock));
+        //Notify buffer that we have entered a new block.
+        buffer.pushBlockEntered(subBlock.getId());
     }
 
-    public static void onSubBlockExited(@Advice.Origin Method method, @Advice.AllArguments Object[] args) {
-        if (PROVIDER == null) {
-            log.error("VFLInitializer.Init() has not been invoked! Please initialize VFL before using it.");
+    public static void onSubBlockExited(@Advice.Origin Method method, @Advice.AllArguments Object[] args, @Advice.Thrown Throwable throwable) {
+        //Validation
+        AnnotationData annotationData = AnnotationData.instance;
+        if (annotationData == null) {
+            log.error("AnnotationData has not been initialized!");
             return;
         }
-        if (!(PROVIDER instanceof VFLAnnotationDataProvider)) {
-            log.error("VFL Initializer's VFLData dataProvider is NOT of type {}. It is mandatory to use {} for @{} to function.",
-                    VFLAnnotationDataProvider.class.getSimpleName(),
-                    VFLAnnotationDataProvider.class.getSimpleName(),
-                    dev.kuku.vfl.api.annotation.SubBlock.class.getSimpleName());
+        Stack<BlockContext> threadContextStack = annotationData.threadContextStack.get();
+        if (threadContextStack == null || threadContextStack.isEmpty()) {
+            log.error("Sub block method exited without parent block context!");
             return;
         }
-        VFLAnnotationDataProvider annotationDataProvider = (VFLAnnotationDataProvider) PROVIDER;
-        BlockContext parentContext = PROVIDER.getBlockContext();
-        if (parentContext == null) {
-            log.warn("No parent block context found for method: {}. Cannot create sub-block", method.getName());
-            return;
+        //Pop the current block context since we are exiting the method
+        BlockContext subBlockContext = threadContextStack.pop();
+        //If exception was thrown, log it
+        if (throwable != null) {
+            BlockLog errorLog = new BlockLog("Exception : ${throwable.getMessage()}", subBlockContext.getCurrentLogId(), LogTypeBase.ERROR);
+            annotationData.buffer.pushLog(errorLog);
+            //Set the error log as the next step of the current block
+            subBlockContext.setCurrentLogId(errorLog.getId());
         }
-        annotationDataProvider.popLatestBlockContextFromThreadLocalStack();
+        //Notify buffer that we sub block has exited
+        annotationData.buffer.pushBlockExited(subBlockContext.getBlock().getId());
+        //Notify buffer that the block has returned to it's parent. This ALWAYS comes after exit.
+        annotationData.buffer.pushBlockReturned(subBlockContext.getBlock().getId());
     }
 }
