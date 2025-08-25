@@ -4,6 +4,7 @@ import dev.kuku.vfl.internal.VFLBase;
 import dev.kuku.vfl.internal.buffer.VFLBuffer;
 import dev.kuku.vfl.internal.dto.BlockContext;
 import dev.kuku.vfl.internal.dto.PublishContext;
+import dev.kuku.vfl.internal.dto.RemoteBlockWrapper;
 import dev.kuku.vfl.internal.models.Block;
 import dev.kuku.vfl.internal.models.BlockLog;
 import dev.kuku.vfl.internal.models.logType.LogTypeBase;
@@ -22,8 +23,6 @@ import java.util.Stack;
 import java.util.function.Function;
 
 public class VFLAnnotation extends VFLBase {
-    //TODO Publish event block method that will return publisher context
-    //TODO Remote block create method that will return remote block context
     static final ThreadLocal<@Nullable Stack<BlockContext>> threadContextStack = new ThreadLocal<>();
     private static final Logger log = LoggerFactory.getLogger(VFLAnnotation.class);
     static @Nullable VFLBuffer buffer = null;
@@ -50,18 +49,7 @@ public class VFLAnnotation extends VFLBase {
     public static synchronized void initialize(@Nullable VFLBuffer buffer) {
         VFLAnnotation.buffer = buffer;
         try {
-            // Attach ByteBuddy agent to JVM
-            Instrumentation inst = ByteBuddyAgent.install();
-            // Configure ByteBuddy to transform classes with @SubBlock annotated methods
-            new AgentBuilder.Default().with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
-                    // Match classes that declare any method annotated with @SubBlock
-                    .type(ElementMatchers.declaresMethod(ElementMatchers.isAnnotatedWith(SubBlock.class)))
-                    // Inject advice into those annotated methods, excluding abstract ones
-                    .transform((builder, typeDescription, classLoader, javaModule, protectionDomain) -> {
-                        log.debug("[VFL] Attempting to instrument: {}", typeDescription.getName());
-                        return builder.visit(Advice.to(SubBlockAdvice.class).on(ElementMatchers.isAnnotatedWith(SubBlock.class).and(ElementMatchers.not(ElementMatchers.isAbstract()))));
-                    }).installOn(inst);
-
+            ByteBuddyInitializer.initializeAgent();
             log.info("[VFL] Instrumentation initialised successfully");
         } catch (Exception e) {
             log.error("[VFL] Initialisation failed", e);
@@ -88,24 +76,28 @@ public class VFLAnnotation extends VFLBase {
             log.warn("VFL buffer is not initialized");
             return null;
         }
+
         BlockContext currentContext = stack.peek();
         String msg = null;
         if (message != null) {
             msg = CommonUtil.FormatMessage(message, args);
         }
-
+        //Create publish block and push it
         Block publishBlock = new Block(publisherName, currentContext.getBlock().getId());
         localBuffer.pushBlock(publishBlock);
+        //Create publish log and push it
         BlockLog publishLog = new BlockLog(msg, currentContext.getBlock().getId(), currentContext.getCurrentLogId(), publishBlock.getId(), LogTypeTraceBlock.PUBLISH_EVENT);
         localBuffer.pushLog(publishLog);
-
+        //Set start and end time for the publish block
+        localBuffer.pushBlockEntered(publishBlock.getId());
+        localBuffer.pushBlockExited(publishBlock.getId());
         return new PublishContext(publishBlock);
     }
 
     /**
      * Creates a remote block and log, pushes them to buffer, and executes the provided function within the context of this remote block. To be used for remote external calls. This function notes down the time the function was completed. The other service needs to use {@link RemoteBlock} annotation to link. Doing so will set the entered and exited time
      */
-    public static <R> @Nullable R RemoteVFL(String blockName, @Nullable String message, Function<Block, R> fn) {
+    public static <R> @Nullable R RemoteBlock(String blockName, @Nullable String message, Function<RemoteBlockWrapper, R> fn) {
         //Validations
         Stack<BlockContext> stack = threadContextStack.get();
         if (stack == null || stack.isEmpty()) {
@@ -117,15 +109,15 @@ public class VFLAnnotation extends VFLBase {
             log.warn("VFL buffer is not initialized");
             return null;
         }
-        BlockContext currentContext = stack.peek();
 
+        BlockContext currentContext = stack.peek();
         Block remoteBlock = new Block(blockName, currentContext.getBlock().getId());
         localBuffer.pushBlock(remoteBlock);
         BlockLog remoteLog = new BlockLog(message, currentContext.getBlock().getId(), currentContext.getCurrentLogId(), remoteBlock.getId(), LogTypeTraceBlock.REMOTE_TRACE);
         localBuffer.pushLog(remoteLog);
-
         try {
-            return fn.apply(remoteBlock);
+            //block entered and block exited will be handled by the other service using the RemoteBlock annotation
+            return fn.apply(new RemoteBlockWrapper(remoteBlock));
         } catch (Exception e) {
             log.error("[VFL] Remote block failed", e);
             BlockLog errorLog = new BlockLog("Exception executing remote block ${e.getMessage()}", currentContext.getBlock().getId(), currentContext.getCurrentLogId(), LogTypeBase.ERROR);
@@ -133,6 +125,49 @@ public class VFLAnnotation extends VFLBase {
             throw e;
         } finally {
             localBuffer.pushBlockReturned(remoteBlock.getId());
+        }
+    }
+
+    // Nested static inner class for ByteBuddy agent setup
+    private static class ByteBuddyInitializer {
+        private static void initializeAgent() {
+            Instrumentation inst = ByteBuddyAgent.install();
+            AgentBuilder agentBuilder = new AgentBuilder.Default().with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION);
+
+            // Instrument methods annotated with @SubBlock
+            agentBuilder = agentBuilder
+                .type(ElementMatchers.declaresMethod(ElementMatchers.isAnnotatedWith(SubBlock.class)))
+                .transform((builder, typeDescription, classLoader, javaModule, protectionDomain) -> {
+                    log.debug("[VFL] Instrumenting: {} for @SubBlock", typeDescription.getName());
+                    return builder.visit(Advice.to(SubBlockAdvice.class).on(ElementMatchers.isAnnotatedWith(SubBlock.class).and(ElementMatchers.not(ElementMatchers.isAbstract()))));
+                });
+
+            // Instrument methods annotated with @RootBlock
+            agentBuilder = agentBuilder
+                .type(ElementMatchers.declaresMethod(ElementMatchers.isAnnotatedWith(RootBlock.class)))
+                .transform((builder, typeDescription, classLoader, javaModule, protectionDomain) -> {
+                    log.debug("[VFL] Instrumenting: {} for @RootBlock", typeDescription.getName());
+                    return builder.visit(Advice.to(RootBlockAdvice.class).on(ElementMatchers.isAnnotatedWith(RootBlock.class).and(ElementMatchers.not(ElementMatchers.isAbstract()))));
+                });
+
+            // Instrument methods annotated with @RemoteBlock
+            agentBuilder = agentBuilder
+                .type(ElementMatchers.declaresMethod(ElementMatchers.isAnnotatedWith(RemoteBlock.class)))
+                .transform((builder, typeDescription, classLoader, javaModule, protectionDomain) -> {
+                    log.debug("[VFL] Instrumenting: {} for @RemoteBlock", typeDescription.getName());
+                    return builder.visit(Advice.to(RemoteBlockAdvice.class).on(ElementMatchers.isAnnotatedWith(RemoteBlock.class).and(ElementMatchers.not(ElementMatchers.isAbstract()))));
+                });
+
+            // Instrument methods annotated with @EventListenerBlock
+            agentBuilder = agentBuilder
+                .type(ElementMatchers.declaresMethod(ElementMatchers.isAnnotatedWith(EventListenerBlock.class)))
+                .transform((builder, typeDescription, classLoader, javaModule, protectionDomain) -> {
+                    log.debug("[VFL] Instrumenting: {} for @EventListenerBlock", typeDescription.getName());
+                    return builder.visit(Advice.to(EventListenerBlockAdvice.class).on(ElementMatchers.isAnnotatedWith(EventListenerBlock.class).and(ElementMatchers.not(ElementMatchers.isAbstract()))));
+                });
+
+            // Install all transformations
+            agentBuilder.installOn(inst);
         }
     }
 }
