@@ -20,12 +20,12 @@ public class AsynchronousBuffer implements VFLBuffer{
     }
 
     @Override
-    public void pushBlockEntered(String blockId) {
+    public void pushBlockStarted(String blockId) {
 
     }
 
     @Override
-    public void pushBlockExited(String blockId) {
+    public void pushBlockFinished(String blockId) {
 
     }
 
