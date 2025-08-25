@@ -10,9 +10,9 @@ public interface VFLBuffer {
 
     void pushBlockReturned(String blockId);
 
-    void pushBlockStarted(String blockId);
+    void pushBlockEntered(String blockId);
 
-    void pushBlockFinished(String blockId);
+    void pushBlockExited(String blockId);
 
     void flush();
 }

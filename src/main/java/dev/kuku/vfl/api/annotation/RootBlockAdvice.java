@@ -78,7 +78,7 @@ public class RootBlockAdvice {
             buffer.pushLog(errorLog);
         }
 
-        buffer.pushBlockFinished(blockContext.getBlock().getId());
+        buffer.pushBlockExited(blockContext.getBlock().getId());
         buffer.pushBlockReturned(blockContext.getBlock().getId());
     }
 }

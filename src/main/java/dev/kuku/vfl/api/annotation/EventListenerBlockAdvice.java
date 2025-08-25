@@ -62,7 +62,7 @@ public class EventListenerBlockAdvice {
             VFLAnnotation.threadContextStack.set(stack);
         }
 
-        buffer.pushBlockStarted(eventListenerBlock.getId());
+        buffer.pushBlockEntered(eventListenerBlock.getId());
 
         stack.push(new BlockContext(eventListenerBlock));
     }
@@ -91,7 +91,7 @@ public class EventListenerBlockAdvice {
             buffer.pushLog(errorLog);
         }
         //Block finished and returned
-        buffer.pushBlockFinished(eventListenerBlock.getId());
+        buffer.pushBlockExited(eventListenerBlock.getId());
         buffer.pushBlockReturned(eventListenerBlock.getId());
 
 

@@ -11,9 +11,6 @@ public class Block {
     private final @Nullable String parentBlockId;
     private final String name;
     private final long createdTime;
-//    private final Long returnedTime;
-//    private final Long enteredTime;
-//    private final Long exitedTime;
 
     public Block(String name, @Nullable String parentBlockId) {
         this.id = UUIDv7.randomUUID().toString();

@@ -61,7 +61,7 @@ public final class SubBlockAdvice {
         //Push the new block context onto the stack, since now this method is the one being invoked so all logs will be for this block context
         threadContextStack.push(new BlockContext(subBlock));
         //Notify buffer that we have entered a new block.
-        buffer.pushBlockStarted(subBlock.getId());
+        buffer.pushBlockEntered(subBlock.getId());
     }
 
     public void methodExited(@Advice.Origin Method method, @Advice.AllArguments Object[] args, @Advice.Thrown Throwable throwable) {
@@ -84,7 +84,7 @@ public final class SubBlockAdvice {
             buffer.pushLog(errorLog);
             //Set the error log as the next step of the current block
             subBlockContext.setCurrentLogId(errorLog.getId());
-            buffer.pushBlockFinished(subBlockContext.getBlock().getId());
+            buffer.pushBlockExited(subBlockContext.getBlock().getId());
             buffer.pushBlockReturned(subBlockContext.getBlock().getId());
         } else {
             VFLBuffer buffer = VFLAnnotation.buffer;
@@ -92,7 +92,7 @@ public final class SubBlockAdvice {
                 log.error("Sub block method exited but buffer is null!");
                 return;
             }
-            buffer.pushBlockFinished(subBlockContext.getBlock().getId());
+            buffer.pushBlockExited(subBlockContext.getBlock().getId());
             buffer.pushBlockReturned(subBlockContext.getBlock().getId());
         }
     }

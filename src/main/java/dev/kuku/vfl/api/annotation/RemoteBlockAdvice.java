@@ -44,7 +44,7 @@ public class RemoteBlockAdvice {
             VFLAnnotation.threadContextStack.set(stack);
         }
 
-        buffer.pushBlockStarted(remoteBlock.getId());
+        buffer.pushBlockEntered(remoteBlock.getId());
         stack.push(new BlockContext(remoteBlock));
     }
 
@@ -70,6 +70,6 @@ public class RemoteBlockAdvice {
             context.setCurrentLogId(errorLog.getId());
         }
 
-        buffer.pushBlockFinished(context.getBlock().getId());
+        buffer.pushBlockExited(context.getBlock().getId());
     }
 }
