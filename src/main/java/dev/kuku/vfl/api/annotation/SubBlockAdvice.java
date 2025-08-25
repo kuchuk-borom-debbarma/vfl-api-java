@@ -45,11 +45,16 @@ public final class SubBlockAdvice {
             log.error("Sub block method called but buffer is null!");
             return;
         }
+        BlockContext parentContext = threadContextStack.peek();
+        if (parentContext == null) {
+            log.error("Sub block method called but parent context is null!");
+            return;
+        }
         //Create sub block for the method
-        Block subBlock = new Block(method.getName());
+        Block subBlock = new Block(method.getName(), parentBlockContext.getBlock().getId());
         buffer.pushBlock(subBlock);
         //Create sub block start log for current block's context
-        BlockLog subBlockStartLog = new BlockLog(null, parentBlockContext.getCurrentLogId(), subBlock.getId(), LogTypeTraceBlock.LINEAR_TRACE);
+        BlockLog subBlockStartLog = new BlockLog(null, parentBlockContext.getBlock().getId(), parentBlockContext.getCurrentLogId(), subBlock.getId(), LogTypeTraceBlock.LINEAR_TRACE);
         buffer.pushLog(subBlockStartLog);
         //Set the sub block start log as the next step of the current block
         parentBlockContext.setCurrentLogId(subBlockStartLog.getId());
@@ -75,7 +80,7 @@ public final class SubBlockAdvice {
                 log.error("Sub block method exited but buffer is null!");
                 return;
             }
-            BlockLog errorLog = new BlockLog("Exception : ${throwable.getMessage()}", subBlockContext.getCurrentLogId(), LogTypeBase.ERROR);
+            BlockLog errorLog = new BlockLog("Exception : ${throwable.getMessage()}", subBlockContext.getBlock().getId(), subBlockContext.getCurrentLogId(), LogTypeBase.ERROR);
             buffer.pushLog(errorLog);
             //Set the error log as the next step of the current block
             subBlockContext.setCurrentLogId(errorLog.getId());
