@@ -73,7 +73,7 @@ public class RootBlockAdvice {
 
         if (throwable != null) {
             logger.error("Root Method threw an exception: ${throwable.getMessage()}", throwable);
-            BlockLog errorLog = new BlockLog("Exception : ${throwable.getMessage()}", blockContext.getCurrentLogId(), LogTypeBase.ERROR);
+            BlockLog errorLog = new BlockLog("Exception : ${throwable.getMessage()}", blockContext.getBlock().getId(), blockContext.getCurrentLogId(), LogTypeBase.ERROR);
             blockContext.setCurrentLogId(errorLog.getId());
             buffer.pushLog(errorLog);
         }
