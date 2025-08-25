@@ -29,7 +29,7 @@ public abstract class VFLBase {
             return;
         }
         String msg = FormatMessage(message, args);
-        BlockLog log = new BlockLog(msg, ctx.getCurrentLogId(), LogTypeBase.INFO);
+        BlockLog log = new BlockLog(msg, ctx.getBlock().getId(), ctx.getCurrentLogId(), LogTypeBase.INFO);
         buffer.pushLog(log);
         ctx.setCurrentLogId(log.getId());
     }
@@ -46,7 +46,7 @@ public abstract class VFLBase {
             return;
         }
         String msg = FormatMessage(message, args);
-        BlockLog logEntry = new BlockLog(msg, ctx.getCurrentLogId(), LogTypeBase.WARN);
+        BlockLog logEntry = new BlockLog(msg, ctx.getBlock().getId(), ctx.getCurrentLogId(), LogTypeBase.WARN);
         buffer.pushLog(logEntry);
         ctx.setCurrentLogId(logEntry.getId());
     }
@@ -63,7 +63,7 @@ public abstract class VFLBase {
             return;
         }
         String msg = FormatMessage(message, args);
-        BlockLog logEntry = new BlockLog(msg, ctx.getCurrentLogId(), LogTypeBase.ERROR);
+        BlockLog logEntry = new BlockLog(msg, ctx.getBlock().getId(), ctx.getCurrentLogId(), LogTypeBase.ERROR);
         buffer.pushLog(logEntry);
         ctx.setCurrentLogId(logEntry.getId());
     }

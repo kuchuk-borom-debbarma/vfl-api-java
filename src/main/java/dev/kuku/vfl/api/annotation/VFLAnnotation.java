@@ -83,7 +83,8 @@ public class VFLAnnotation extends VFLBase {
             log.warn("VFL block stack is null or empty");
             return null;
         }
-        if (buffer == null) {
+        final VFLBuffer localBuffer = VFLAnnotation.buffer;
+        if (localBuffer == null) {
             log.warn("VFL buffer is not initialized");
             return null;
         }
@@ -94,9 +95,9 @@ public class VFLAnnotation extends VFLBase {
         }
 
         Block publishBlock = new Block(publisherName, currentContext.getBlock().getId());
-        buffer.pushBlock(publishBlock);
-        BlockLog publishLog = new BlockLog(msg, currentContext.getCurrentLogId(), publishBlock.getId(), LogTypeTraceBlock.PUBLISH_EVENT);
-        buffer.pushLog(publishLog);
+        localBuffer.pushBlock(publishBlock);
+        BlockLog publishLog = new BlockLog(msg, currentContext.getBlock().getId(), currentContext.getCurrentLogId(), publishBlock.getId(), LogTypeTraceBlock.PUBLISH_EVENT);
+        localBuffer.pushLog(publishLog);
 
         return new PublishContext(publishBlock);
     }
@@ -111,26 +112,27 @@ public class VFLAnnotation extends VFLBase {
             log.warn("VFL block stack is null or empty");
             return null;
         }
-        if (buffer == null) {
+        final VFLBuffer localBuffer = buffer;
+        if (localBuffer == null) {
             log.warn("VFL buffer is not initialized");
             return null;
         }
         BlockContext currentContext = stack.peek();
 
         Block remoteBlock = new Block(blockName, currentContext.getBlock().getId());
-        buffer.pushBlock(remoteBlock);
-        BlockLog remoteLog = new BlockLog(message, currentContext.getCurrentLogId(), remoteBlock.getId(), LogTypeTraceBlock.REMOTE_TRACE);
-        buffer.pushLog(remoteLog);
+        localBuffer.pushBlock(remoteBlock);
+        BlockLog remoteLog = new BlockLog(message, currentContext.getBlock().getId(), currentContext.getCurrentLogId(), remoteBlock.getId(), LogTypeTraceBlock.REMOTE_TRACE);
+        localBuffer.pushLog(remoteLog);
 
         try {
             return fn.apply(remoteBlock);
         } catch (Exception e) {
             log.error("[VFL] Remote block failed", e);
-            BlockLog errorLog = new BlockLog("Exception executing remote block ${e.getMessage()}", currentContext.getCurrentLogId(), LogTypeBase.ERROR);
+            BlockLog errorLog = new BlockLog("Exception executing remote block ${e.getMessage()}", currentContext.getBlock().getId(), currentContext.getCurrentLogId(), LogTypeBase.ERROR);
             currentContext.setCurrentLogId(errorLog.getId());
             throw e;
         } finally {
-            buffer.pushBlockReturned(remoteBlock.getId());
+            localBuffer.pushBlockReturned(remoteBlock.getId());
         }
     }
 }
