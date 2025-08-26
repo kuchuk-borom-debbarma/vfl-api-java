@@ -15,4 +15,6 @@ public interface VFLBuffer {
     void pushBlockExited(String blockId);
 
     void flush();
+
+    void close();
 }
