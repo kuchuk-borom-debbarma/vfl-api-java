@@ -39,8 +39,6 @@ public class VFLHubFlushHandler implements VFLFlushHandler {
                     .build();
             client.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (InterruptedException | IOException e) {
-            log.error(Arrays.toString(e.getStackTrace()));
-            log.error(e.getMessage(), e);
             // Only log error, do not throw
         }
     }
@@ -59,9 +57,6 @@ public class VFLHubFlushHandler implements VFLFlushHandler {
                     .build();
             client.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (InterruptedException | IOException e) {
-            log.error(Arrays.toString(e.getStackTrace()));
-            log.error(e.getMessage(), e);
-            // Only log error, do not throw
         }
     }
 

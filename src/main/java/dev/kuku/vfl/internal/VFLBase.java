@@ -4,7 +4,6 @@ import dev.kuku.vfl.internal.buffer.VFLBuffer;
 import dev.kuku.vfl.internal.dto.BlockContext;
 import dev.kuku.vfl.internal.models.BlockLog;
 import dev.kuku.vfl.internal.models.logType.LogTypeBase;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 
 import static dev.kuku.vfl.internal.util.CommonUtil.FormatMessage;
@@ -12,10 +11,10 @@ import static dev.kuku.vfl.internal.util.CommonUtil.FormatMessage;
 public abstract class VFLBase {
     private final Logger log = org.slf4j.LoggerFactory.getLogger(VFLBase.class);
 
-    protected abstract @Nullable BlockContext getBlockContext();
+    protected abstract  BlockContext getBlockContext();
 
     protected
-    abstract @Nullable VFLBuffer getVFLBuffer();
+    abstract VFLBuffer getVFLBuffer();
 
     public void info(String message, Object... args) {
         BlockContext ctx = getBlockContext();

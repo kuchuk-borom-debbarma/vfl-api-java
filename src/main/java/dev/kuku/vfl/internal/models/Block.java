@@ -2,17 +2,16 @@ package dev.kuku.vfl.internal.models;
 
 
 import io.github.robsonkades.uuidv7.UUIDv7;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 
 public class Block {
     private final String id;
-    private final @Nullable String parentBlockId;
+    private final String parentBlockId;
     private final String name;
     private final long createdTime;
 
-    public Block(String name, @Nullable String parentBlockId) {
+    public Block(String name, String parentBlockId) {
         this.id = UUIDv7.randomUUID().toString();
         this.parentBlockId = parentBlockId;
         this.name = name;
@@ -23,7 +22,7 @@ public class Block {
         return id;
     }
 
-    public @Nullable String getParentBlockId() {
+    public String getParentBlockId() {
         return parentBlockId;
     }
 

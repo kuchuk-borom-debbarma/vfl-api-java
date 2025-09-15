@@ -14,7 +14,6 @@ import net.bytebuddy.agent.ByteBuddyAgent;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.matcher.ElementMatchers;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,13 +22,13 @@ import java.util.Stack;
 import java.util.function.Function;
 
 public class VFLAnnotation extends VFLBase {
-    static final ThreadLocal<@Nullable Stack<BlockContext>> threadContextStack = new ThreadLocal<>();
+    static final ThreadLocal< Stack<BlockContext>> threadContextStack = new ThreadLocal<>();
     private static final Logger log = LoggerFactory.getLogger(VFLAnnotation.class);
-    static @Nullable VFLBuffer buffer = null;
+    static  VFLBuffer buffer = null;
 
     @Override
-    protected @Nullable BlockContext getBlockContext() {
-        final @Nullable Stack<BlockContext> stack = threadContextStack.get();
+    protected  BlockContext getBlockContext() {
+        final  Stack<BlockContext> stack = threadContextStack.get();
         if (stack == null) {
             log.warn("VFL block stack is null");
             return null;
@@ -42,11 +41,11 @@ public class VFLAnnotation extends VFLBase {
     }
 
     @Override
-    protected @Nullable VFLBuffer getVFLBuffer() {
+    protected  VFLBuffer getVFLBuffer() {
         return VFLAnnotation.buffer;
     }
 
-    public static synchronized void initialize(@Nullable VFLBuffer buffer) {
+    public static synchronized void initialize( VFLBuffer buffer) {
         VFLAnnotation.buffer = buffer;
         try {
             ByteBuddyInitializer.initializeAgent();
@@ -64,7 +63,7 @@ public class VFLAnnotation extends VFLBase {
     /**
      * Creates a publish event block and log, pushes them to buffer, and returns a PublishContext. This context needs to be used by listeners.
      */
-    public static @Nullable PublishContext CreatePublishContext(String publisherName, @Nullable String message, Object... args) {
+    public static  PublishContext CreatePublishContext(String publisherName,  String message, Object... args) {
         //Validations
         Stack<BlockContext> stack = threadContextStack.get();
         if (stack == null || stack.isEmpty()) {
@@ -97,7 +96,7 @@ public class VFLAnnotation extends VFLBase {
     /**
      * Creates a remote block and log, pushes them to buffer, and executes the provided function within the context of this remote block. To be used for remote external calls. This function notes down the time the function was completed. The other service needs to use {@link RemoteBlock} annotation to link. Doing so will set the entered and exited time
      */
-    public static <R> @Nullable R RemoteBlock(String blockName, @Nullable String message, Function<RemoteBlockWrapper, R> fn) {
+    public static <R>  R RemoteBlock(String blockName,  String message, Function<RemoteBlockWrapper, R> fn) {
         //Validations
         Stack<BlockContext> stack = threadContextStack.get();
         if (stack == null || stack.isEmpty()) {
@@ -113,7 +112,7 @@ public class VFLAnnotation extends VFLBase {
         BlockContext currentContext = stack.peek();
         Block remoteBlock = new Block(blockName, currentContext.getBlock().getId());
         localBuffer.pushBlock(remoteBlock);
-        BlockLog remoteLog = new BlockLog(message, currentContext.getBlock().getId(), currentContext.getCurrentLogId(), remoteBlock.getId(), LogTypeTraceBlock.REMOTE_TRACE);
+        BlockLog remoteLog = new BlockLog(message, currentContext.getBlock().getId(), currentContext.getCurrentLogId(), remoteBlock.getId(), LogTypeTraceBlock.TRACE_REMOTE);
         localBuffer.pushLog(remoteLog);
         try {
             //block entered and block exited will be handled by the other service using the RemoteBlock annotation

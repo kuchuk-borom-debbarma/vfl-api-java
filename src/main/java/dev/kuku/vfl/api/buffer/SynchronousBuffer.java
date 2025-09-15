@@ -162,6 +162,11 @@ public class SynchronousBuffer implements VFLBuffer {
         }
     }
 
+    @Override
+    public void close() {
+        //TODO
+    }
+
     private void checkAndFlush() {
         // Fast check without acquiring lock
         if (totalSize.get() >= flushSize) {
