@@ -11,7 +11,7 @@ import static dev.kuku.vfl.internal.util.CommonUtil.FormatMessage;
 public abstract class VFLBase {
     private final Logger log = org.slf4j.LoggerFactory.getLogger(VFLBase.class);
 
-    protected abstract  BlockContext getBlockContext();
+    protected abstract BlockContext getBlockContext();
 
     protected
     abstract VFLBuffer getVFLBuffer();

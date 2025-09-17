@@ -14,9 +14,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Asynchronous buffer that can flush data parallelly without blocking main thread. <br>
+ * Multiple concurrent flushes are allowed.
+ */
 public class AsynchronousBuffer implements VFLBuffer {
     private static final Logger log = LoggerFactory.getLogger(AsynchronousBuffer.class);
     private final int bufferSize;
@@ -31,7 +34,6 @@ public class AsynchronousBuffer implements VFLBuffer {
     private final Map<String, Long> blockExited = new HashMap<>();
     private final Map<String, Long> blockReturned = new HashMap<>();
     private int totalSize = 0;
-    private volatile boolean flushingAll = false;
 
     public AsynchronousBuffer(int bufferSize, int flushInterval, int flushTimeout, ExecutorService flushExecutor, ScheduledExecutorService periodicFlushHandler, VFLFlushHandler flushHandler) {
         this.bufferSize = bufferSize;
@@ -41,11 +43,11 @@ public class AsynchronousBuffer implements VFLBuffer {
         this.flushHandler = flushHandler;
 
         periodicFlushHandler.scheduleWithFixedDelay(() -> {
-            if (flushingAll) {
-                return; // Skip periodic flush during manual flush
-            }
             synchronized (this) {
                 var toFlush = copyContentsAndClear();
+                if (toFlush.isEmpty()) {
+                    return;
+                }
                 flushAll(toFlush);
             }
         }, flushInterval, flushInterval, TimeUnit.MILLISECONDS);
@@ -69,9 +71,6 @@ public class AsynchronousBuffer implements VFLBuffer {
     }
 
     private void flushIfFull() {
-        if (flushingAll) {
-            return; // Don't add new tasks during manual flush
-        }
 
         FlushData flushData = null;
         synchronized (this) {
@@ -80,13 +79,14 @@ public class AsynchronousBuffer implements VFLBuffer {
             }
         }
 
-        if (flushData != null) {
+        if (flushData != null && !flushData.isEmpty()) {
             FlushData finalFlushData = flushData;
             flushExecutor.execute(() -> flushAll(finalFlushData));
         }
     }
 
     private void flushAll(FlushData toFlush) {
+        //order is important
         if (!toFlush.blocks.isEmpty()) {
             flushHandler.flushBlocks(toFlush.blocks);
         }
@@ -150,78 +150,33 @@ public class AsynchronousBuffer implements VFLBuffer {
     }
 
     @Override
-    public void flush() {
-        flushingAll = true;
-
+    public void forceFlush() {
         // Flush any remaining data in the buffer
         FlushData finalFlushData;
         synchronized (this) {
             finalFlushData = copyContentsAndClear();
         }
-
+        periodicFlushHandler.close();
         // Submit final flush task if there's data
-        if (!isEmpty(finalFlushData)) {
+        if (!finalFlushData.isEmpty()) {
             flushExecutor.submit(() -> flushAll(finalFlushData));
         }
-
+        flushExecutor.shutdown();
+        periodicFlushHandler.shutdown();
         // Wait for all tasks to complete with timeout
         long startTime = System.currentTimeMillis();
-        while (hasActiveTasks()) {
-            if (System.currentTimeMillis() - startTime > flushTimeout) {
-                log.error("Flush timeout reached - some tasks may not have completed");
-                break;
-            }
+        long currentTime = startTime;
+        while (currentTime - startTime < this.flushTimeout || (flushExecutor.isShutdown() && periodicFlushHandler.isShutdown())) {
+            currentTime = System.currentTimeMillis();
             try {
                 Thread.sleep(10);
+
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 log.error("Flush interrupted");
                 break;
             }
         }
-
-        flushingAll = false;
-    }
-
-    private boolean hasActiveTasks() {
-        // Try ThreadPoolExecutor first for more accurate info
-        if (flushExecutor instanceof ThreadPoolExecutor) {
-            ThreadPoolExecutor tpe = (ThreadPoolExecutor) flushExecutor;
-            return tpe.getActiveCount() > 0 || tpe.getQueue().size() > 0;
-        }
-        // Fallback: assume no active tasks if we can't check
-        // This is not ideal but works for any ExecutorService
-        return false;
-    }
-
-    @Override
-    public void close() {
-        try {
-            periodicFlushHandler.shutdown();
-            if (!periodicFlushHandler.awaitTermination(flushTimeout, TimeUnit.MILLISECONDS)) {
-                periodicFlushHandler.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.error("Failed to close periodic flush handler: {}", e.getMessage());
-        }
-
-        try {
-            if (!flushExecutor.awaitTermination(flushTimeout, TimeUnit.MILLISECONDS)) {
-                log.error("Flush executor did not terminate within timeout");
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.error("Failed to close flush executor: {}", e.getMessage());
-        }
-    }
-
-    private boolean isEmpty(FlushData flushData) {
-        return flushData.blocks.isEmpty() &&
-               flushData.logs.isEmpty() &&
-               flushData.blockEntered.isEmpty() &&
-               flushData.blockExited.isEmpty() &&
-               flushData.blockReturned.isEmpty();
     }
 
     private static class FlushData {
@@ -237,6 +192,14 @@ public class AsynchronousBuffer implements VFLBuffer {
             this.blockEntered = blockEntered;
             this.blockExited = blockExited;
             this.blockReturned = blockReturned;
+        }
+
+        public boolean isEmpty() {
+            return blocks.isEmpty()
+                   && logs.isEmpty()
+                   && blockEntered.isEmpty()
+                   && blockExited.isEmpty()
+                   && blockReturned.isEmpty();
         }
     }
 }

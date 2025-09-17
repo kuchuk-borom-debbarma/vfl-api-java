@@ -25,7 +25,7 @@ public class RootBlockAdvice {
 
     @Advice.OnMethodExit
     public static void onExit(@Advice.Origin Method method, @Advice.AllArguments Object[] args, @Advice.Thrown Throwable threw) {
-        INSTANCE.methodExisted(method, args, threw);
+        INSTANCE.methodExited(method, args, threw);
     }
 
     public void methodEntered(Method method, Object[] args) {
@@ -51,7 +51,7 @@ public class RootBlockAdvice {
         stack.push(new BlockContext(rootBlock));
     }
 
-    public void methodExisted(Method method, Object[] args, Throwable throwable) {
+    public void methodExited(Method method, Object[] args, Throwable throwable) {
         Logger logger = LoggerFactory.getLogger("${method.getClass()}-${method.getName()}");
         logger.info("Exited root block method: ${method.getName()}-${method.getClass().getSimpleName()}");
         Stack<BlockContext> stack = VFLAnnotation.threadContextStack.get();
@@ -80,5 +80,6 @@ public class RootBlockAdvice {
 
         buffer.pushBlockExited(blockContext.getBlock().getId());
         buffer.pushBlockReturned(blockContext.getBlock().getId());
+        buffer.forceFlush();
     }
 }
