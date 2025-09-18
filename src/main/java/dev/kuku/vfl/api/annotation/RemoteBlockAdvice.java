@@ -14,6 +14,7 @@ import java.lang.reflect.Method;
 import java.util.Stack;
 
 public class RemoteBlockAdvice {
+    //TODO remote block must act as root block with explicit warning (configurable) if it is missing context
     private static final RemoteBlockAdvice instance = new RemoteBlockAdvice();
 
     private RemoteBlockAdvice() {
