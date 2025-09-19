@@ -4,6 +4,7 @@ import dev.kuku.vfl.internal.VFLBase;
 import dev.kuku.vfl.internal.buffer.VFLBuffer;
 import dev.kuku.vfl.internal.dto.BlockContext;
 import dev.kuku.vfl.internal.dto.PublishContext;
+import dev.kuku.vfl.internal.dto.RemoteBlockWrapper;
 import dev.kuku.vfl.internal.models.Block;
 import dev.kuku.vfl.internal.models.BlockLog;
 import dev.kuku.vfl.internal.models.logType.LogTypeBase;
@@ -13,24 +14,27 @@ import net.bytebuddy.agent.ByteBuddyAgent;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.matcher.ElementMatchers;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.instrument.Instrumentation;
+import java.lang.reflect.Method;
 import java.util.Stack;
 import java.util.function.Function;
 
 public class VFLAnnotation extends VFLBase {
-    //TODO Publish event block method that will return publisher context
-    //TODO Remote block create method that will return remote block context
-    static final ThreadLocal<@Nullable Stack<BlockContext>> threadContextStack = new ThreadLocal<>();
+    static VFLAnnotation INSTANCE = null;
+    static final ThreadLocal<Stack<BlockContext>> threadContextStack = new ThreadLocal<>();
     private static final Logger log = LoggerFactory.getLogger(VFLAnnotation.class);
-    static @Nullable VFLBuffer buffer = null;
+    static VFLBuffer buffer = null;
+
+    private VFLAnnotation() {
+
+    }
 
     @Override
-    protected @Nullable BlockContext getBlockContext() {
-        final @Nullable Stack<BlockContext> stack = threadContextStack.get();
+    protected BlockContext getBlockContext() {
+        final Stack<BlockContext> stack = threadContextStack.get();
         if (stack == null) {
             log.warn("VFL block stack is null");
             return null;
@@ -39,29 +43,31 @@ public class VFLAnnotation extends VFLBase {
             log.warn("VFL block stack is empty");
             return null;
         }
-        return stack.peek();
+        var currentStackContext = stack.peek();
+        log.debug("Current stack context: {}", currentStackContext);
+        return currentStackContext;
     }
 
     @Override
-    protected @Nullable VFLBuffer getVFLBuffer() {
+    protected VFLBuffer getVFLBuffer() {
         return VFLAnnotation.buffer;
     }
 
-    public static synchronized void initialize(@Nullable VFLBuffer buffer) {
+    public static VFLAnnotation getInstance() {
+        if (INSTANCE == null) {
+            INSTANCE = new VFLAnnotation();
+        }
+        return INSTANCE;
+    }
+
+    public static synchronized void instrument(VFLBuffer buffer) {
+        if (buffer == null) {
+            log.warn("VFL buffer is null. Aborting initialization of VFL Annotation.");
+            return;
+        }
         VFLAnnotation.buffer = buffer;
         try {
-            // Attach ByteBuddy agent to JVM
-            Instrumentation inst = ByteBuddyAgent.install();
-            // Configure ByteBuddy to transform classes with @SubBlock annotated methods
-            new AgentBuilder.Default().with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
-                    // Match classes that declare any method annotated with @SubBlock
-                    .type(ElementMatchers.declaresMethod(ElementMatchers.isAnnotatedWith(SubBlock.class)))
-                    // Inject advice into those annotated methods, excluding abstract ones
-                    .transform((builder, typeDescription, classLoader, javaModule, protectionDomain) -> {
-                        log.debug("[VFL] Attempting to instrument: {}", typeDescription.getName());
-                        return builder.visit(Advice.to(SubBlockAdvice.class).on(ElementMatchers.isAnnotatedWith(SubBlock.class).and(ElementMatchers.not(ElementMatchers.isAbstract()))));
-                    }).installOn(inst);
-
+            ByteBuddyInitializer.initializeAgent();
             log.info("[VFL] Instrumentation initialised successfully");
         } catch (Exception e) {
             log.error("[VFL] Initialisation failed", e);
@@ -69,14 +75,17 @@ public class VFLAnnotation extends VFLBase {
         }
     }
 
-    public static synchronized void initialize() {
-        VFLAnnotation.initialize(null);
+    /**
+     * VFL Annotation initializer that will skip initialization. Useful for disabling VFL without modifying other part of the codebase
+     */
+    public static synchronized void instrument() {
+        VFLAnnotation.instrument(null);
     }
 
     /**
      * Creates a publish event block and log, pushes them to buffer, and returns a PublishContext. This context needs to be used by listeners.
      */
-    public static @Nullable PublishContext CreatePublishContext(String publisherName, @Nullable String message, Object... args) {
+    public static PublishContext CreatePublishContext(String publisherName, String message, Object... args) {
         //Validations
         Stack<BlockContext> stack = threadContextStack.get();
         if (stack == null || stack.isEmpty()) {
@@ -88,24 +97,28 @@ public class VFLAnnotation extends VFLBase {
             log.warn("VFL buffer is not initialized");
             return null;
         }
+
         BlockContext currentContext = stack.peek();
         String msg = null;
         if (message != null) {
             msg = CommonUtil.FormatMessage(message, args);
         }
-
+        //Create publish block and push it
         Block publishBlock = new Block(publisherName, currentContext.getBlock().getId());
         localBuffer.pushBlock(publishBlock);
+        //Create publish log and push it
         BlockLog publishLog = new BlockLog(msg, currentContext.getBlock().getId(), currentContext.getCurrentLogId(), publishBlock.getId(), LogTypeTraceBlock.PUBLISH_EVENT);
         localBuffer.pushLog(publishLog);
-
+        //Set start and end time for the publish block
+        localBuffer.pushBlockEntered(publishBlock.getId());
+        localBuffer.pushBlockExited(publishBlock.getId());
         return new PublishContext(publishBlock);
     }
 
     /**
      * Creates a remote block and log, pushes them to buffer, and executes the provided function within the context of this remote block. To be used for remote external calls. This function notes down the time the function was completed. The other service needs to use {@link RemoteBlock} annotation to link. Doing so will set the entered and exited time
      */
-    public static <R> @Nullable R RemoteVFL(String blockName, @Nullable String message, Function<Block, R> fn) {
+    public static <R> R RemoteBlock(String blockName, String message, Function<RemoteBlockWrapper, R> fn) {
         //Validations
         Stack<BlockContext> stack = threadContextStack.get();
         if (stack == null || stack.isEmpty()) {
@@ -117,15 +130,15 @@ public class VFLAnnotation extends VFLBase {
             log.warn("VFL buffer is not initialized");
             return null;
         }
-        BlockContext currentContext = stack.peek();
 
+        BlockContext currentContext = stack.peek();
         Block remoteBlock = new Block(blockName, currentContext.getBlock().getId());
         localBuffer.pushBlock(remoteBlock);
-        BlockLog remoteLog = new BlockLog(message, currentContext.getBlock().getId(), currentContext.getCurrentLogId(), remoteBlock.getId(), LogTypeTraceBlock.REMOTE_TRACE);
+        BlockLog remoteLog = new BlockLog(message, currentContext.getBlock().getId(), currentContext.getCurrentLogId(), remoteBlock.getId(), LogTypeTraceBlock.TRACE_REMOTE);
         localBuffer.pushLog(remoteLog);
-
         try {
-            return fn.apply(remoteBlock);
+            //block entered and block exited will be handled by the other service using the RemoteBlock annotation
+            return fn.apply(new RemoteBlockWrapper(remoteBlock));
         } catch (Exception e) {
             log.error("[VFL] Remote block failed", e);
             BlockLog errorLog = new BlockLog("Exception executing remote block ${e.getMessage()}", currentContext.getBlock().getId(), currentContext.getCurrentLogId(), LogTypeBase.ERROR);
@@ -133,6 +146,110 @@ public class VFLAnnotation extends VFLBase {
             throw e;
         } finally {
             localBuffer.pushBlockReturned(remoteBlock.getId());
+        }
+    }
+
+    // Nested static inner class for ByteBuddy agent setup
+    private static class ByteBuddyInitializer {
+        private static void initializeAgent() {
+            Instrumentation inst = ByteBuddyAgent.install();
+            AgentBuilder agentBuilder = new AgentBuilder.Default()
+                    .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+                    .with(AgentBuilder.InitializationStrategy.NoOp.INSTANCE)
+                    .with(AgentBuilder.TypeStrategy.Default.REDEFINE);
+
+            // Instrument methods annotated with @SubBlock
+            agentBuilder = agentBuilder
+                    .type(ElementMatchers.declaresMethod(ElementMatchers.isAnnotatedWith(SubBlock.class)))
+                    .transform((builder, typeDescription, classLoader, javaModule, protectionDomain) -> {
+                        log.debug("[VFL] Instrumenting: {} for @SubBlock", typeDescription.getName());
+                        return builder.visit(Advice.to(SubBlockAdvice.class).on(ElementMatchers.isAnnotatedWith(SubBlock.class).and(ElementMatchers.not(ElementMatchers.isAbstract()))));
+                    });
+
+            // Instrument methods annotated with @RootBlock
+            agentBuilder = agentBuilder
+                    .type(ElementMatchers.declaresMethod(ElementMatchers.isAnnotatedWith(RootBlock.class)))
+                    .transform((builder, typeDescription, classLoader, javaModule, protectionDomain) -> {
+                        log.debug("[VFL] Instrumenting: {} for @RootBlock", typeDescription.getName());
+                        return builder.visit(Advice.to(RootBlockAdvice.class).on(ElementMatchers.isAnnotatedWith(RootBlock.class).and(ElementMatchers.not(ElementMatchers.isAbstract()))));
+                    });
+
+            // Instrument methods annotated with @RemoteBlock
+            agentBuilder = agentBuilder
+                    .type(ElementMatchers.declaresMethod(ElementMatchers.isAnnotatedWith(RemoteBlock.class)))
+                    .transform((builder, typeDescription, classLoader, javaModule, protectionDomain) -> {
+                        log.debug("[VFL] Instrumenting: {} for @RemoteBlock", typeDescription.getName());
+                        return builder.visit(Advice.to(RemoteBlockAdvice.class).on(ElementMatchers.isAnnotatedWith(RemoteBlock.class).and(ElementMatchers.not(ElementMatchers.isAbstract()))));
+                    });
+
+            // Instrument methods annotated with @EventListenerBlock
+            agentBuilder = agentBuilder
+                    .type(ElementMatchers.declaresMethod(ElementMatchers.isAnnotatedWith(EventListenerBlock.class)))
+                    .transform((builder, typeDescription, classLoader, javaModule, protectionDomain) -> {
+                        log.debug("[VFL] Instrumenting: {} for @EventListenerBlock", typeDescription.getName());
+                        return builder.visit(Advice.to(EventListenerBlockAdvice.class).on(ElementMatchers.isAnnotatedWith(EventListenerBlock.class).and(ElementMatchers.not(ElementMatchers.isAbstract()))));
+                    });
+
+            // Install all transformations
+            agentBuilder.installOn(inst);
+
+            // Retransform already loaded classes that have our annotations
+            try {
+                Class<?>[] loadedClasses = inst.getAllLoadedClasses();
+                log.debug("[VFL] Checking {} loaded classes for retransformation", loadedClasses.length);
+
+                for (Class<?> loadedClass : loadedClasses) {
+                    if (inst.isModifiableClass(loadedClass) && !loadedClass.isInterface() && !loadedClass.isAnnotation()) {
+                        boolean hasAnnotatedMethods = false;
+
+                        try {
+                            // Check if class has methods with our annotations
+                            for (Method method : loadedClass.getDeclaredMethods()) {
+                                if (method.isAnnotationPresent(RootBlock.class) ||
+                                    method.isAnnotationPresent(SubBlock.class) ||
+                                    method.isAnnotationPresent(RemoteBlock.class) ||
+                                    method.isAnnotationPresent(EventListenerBlock.class)) {
+                                    hasAnnotatedMethods = true;
+                                    log.debug("[VFL] Found annotated method: {}.{}", loadedClass.getSimpleName(), method.getName());
+                                    break;
+                                }
+                            }
+
+                            if (hasAnnotatedMethods) {
+                                log.info("[VFL] Retransforming already loaded class: {}", loadedClass.getName());
+                                inst.retransformClasses(loadedClass);
+                            }
+                        } catch (NoClassDefFoundError | SecurityException e) {
+                            // Skip classes that can't be analyzed due to missing dependencies or security restrictions
+                            log.debug("[VFL] Skipping class {} due to: {}", loadedClass.getName(), e.getMessage());
+                        } catch (Exception e) {
+                            log.warn("[VFL] Error checking class {} for annotations: {}", loadedClass.getName(), e.getMessage());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[VFL] Failed to retransform some classes", e);
+                // Don't rethrow - partial success is better than complete failure
+            }
+        }
+    }
+
+    static class Util {
+        public static BlockContext popLatestContext(boolean clean) {
+            var stack = VFLAnnotation.threadContextStack.get();
+            if (stack == null) return null;
+            if (stack.isEmpty() && clean) {
+                log.debug("[VFL] Empty block context. Removing threadContextStack");
+                VFLAnnotation.threadContextStack.remove();
+                return null;
+            }
+            var ctx = stack.pop();
+            if (stack.isEmpty() && clean) {
+                log.debug("[VFL] Emptied block context after popping ${ctx.getBlock().getId().substring(0,5)}");
+                VFLAnnotation.threadContextStack.remove();
+            }
+            return ctx;
+
         }
     }
 }

@@ -1,9 +1,10 @@
 package dev.kuku.vfl.internal.models.logType;
 
 public enum LogTypeTraceBlock {
-    LINEAR_TRACE,
-    PARALLEL_JOIN_BACK_TRACE,
-    PARALLEL_INDEPENDENT_TRACE,
+    TRACE_PRIMARY,
+    TRACE_PARALLEL_JOIN,
+    TRACE_PARALLEL,
+    TRACE_REMOTE,
     PUBLISH_EVENT,
-    REMOTE_TRACE, LISTEN_EVENT
+    LISTEN_EVENT
 }

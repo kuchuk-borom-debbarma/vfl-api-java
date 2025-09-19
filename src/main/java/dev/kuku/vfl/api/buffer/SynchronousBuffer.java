@@ -17,160 +17,64 @@ public class SynchronousBuffer implements VFLBuffer {
     private final VFLFlushHandler flushHandler;
     private final int flushSize;
 
-    // Use read-write lock for better read performance
+    // Simplified locking
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
-    private final ReentrantReadWriteLock.ReadLock readLock = lock.readLock();
-    private final ReentrantReadWriteLock.WriteLock writeLock = lock.writeLock();
-
-    // Atomic counter for fast size checking without acquiring locks
     private final AtomicInteger totalSize = new AtomicInteger(0);
 
-    // Will be initialized in constructor with appropriate capacity
-    private final List<BlockLog> logsToFlush;
-    private final List<Block> blocksToFlush;
-    private final Map<String, Long> blockEnteredToFlush;
-    private final Map<String, Long> blockExitedToFlush;
-    private final Map<String, Long> blockReturnedToFlush;
+    // Consolidated data structures
+    private final List<BlockLog> logs;
+    private final List<Block> blocks;
+    private final Map<String, Long> blockEntered;
+    private final Map<String, Long> blockExited;
+    private final Map<String, Long> blockReturned;
 
     public SynchronousBuffer(VFLFlushHandler flushHandler, int flushSize) {
         this.flushHandler = flushHandler;
         this.flushSize = flushSize;
 
-        // Initialize collections with reasonable capacity to minimize resizing
-        int initialCapacity = Math.max(16, flushSize / 4);
-        this.logsToFlush = new ArrayList<>(initialCapacity);
-        this.blocksToFlush = new ArrayList<>(initialCapacity);
-        this.blockEnteredToFlush = new HashMap<>(initialCapacity);
-        this.blockExitedToFlush = new HashMap<>(initialCapacity);
-        this.blockReturnedToFlush = new HashMap<>(initialCapacity);
+        // Initialize with reasonable capacity
+        int capacity = Math.max(16, flushSize / 4);
+        this.logs = new ArrayList<>(capacity);
+        this.blocks = new ArrayList<>(capacity);
+        this.blockEntered = new HashMap<>(capacity);
+        this.blockExited = new HashMap<>(capacity);
+        this.blockReturned = new HashMap<>(capacity);
     }
 
     @Override
     public void pushLog(BlockLog log) {
-        writeLock.lock();
-        try {
-            logsToFlush.add(log);
-            totalSize.incrementAndGet();
-        } finally {
-            writeLock.unlock();
-        }
-        checkAndFlush();
+        addItem(() -> logs.add(log));
     }
 
     @Override
     public void pushBlock(Block block) {
-        writeLock.lock();
-        try {
-            blocksToFlush.add(block);
-            totalSize.incrementAndGet();
-        } finally {
-            writeLock.unlock();
-        }
-        checkAndFlush();
+        addItem(() -> blocks.add(block));
     }
 
     @Override
     public void pushBlockReturned(String blockId) {
-        long timestamp = System.currentTimeMillis();
-        writeLock.lock();
-        try {
-            blockReturnedToFlush.put(blockId, timestamp);
-            totalSize.incrementAndGet();
-        } finally {
-            writeLock.unlock();
-        }
-        checkAndFlush();
+        addItem(() -> blockReturned.put(blockId, getCurrentTime()));
     }
 
     @Override
     public void pushBlockEntered(String blockId) {
-        long timestamp = System.currentTimeMillis();
-        writeLock.lock();
-        try {
-            blockEnteredToFlush.put(blockId, timestamp);
-            totalSize.incrementAndGet();
-        } finally {
-            writeLock.unlock();
-        }
-        checkAndFlush();
+        addItem(() -> blockEntered.put(blockId, getCurrentTime()));
     }
 
     @Override
     public void pushBlockExited(String blockId) {
-        long timestamp = System.currentTimeMillis();
-        writeLock.lock();
-        try {
-            blockExitedToFlush.put(blockId, timestamp);
-            totalSize.incrementAndGet();
-        } finally {
-            writeLock.unlock();
-        }
-        checkAndFlush();
+        addItem(() -> blockExited.put(blockId, getCurrentTime()));
     }
 
     @Override
-    public void flush() {
-        // Create local variables to hold the data to flush
-        List<Block> blocksSnapshot;
-        List<BlockLog> logsSnapshot;
-        Map<String, Long> blockEnteredSnapshot;
-        Map<String, Long> blockExitedSnapshot;
-        Map<String, Long> blockReturnedSnapshot;
-
-        writeLock.lock();
-        try {
-            // Fast exit if nothing to flush
-            if (totalSize.get() == 0) {
-                return;
-            }
-
-            // Create snapshots and clear originals atomically
-            blocksSnapshot = new ArrayList<>(this.blocksToFlush);
-            logsSnapshot = new ArrayList<>(this.logsToFlush);
-            blockEnteredSnapshot = new HashMap<>(this.blockEnteredToFlush);
-            blockExitedSnapshot = new HashMap<>(this.blockExitedToFlush);
-            blockReturnedSnapshot = new HashMap<>(this.blockReturnedToFlush);
-
-            // Clear all collections
-            this.blocksToFlush.clear();
-            this.logsToFlush.clear();
-            this.blockEnteredToFlush.clear();
-            this.blockExitedToFlush.clear();
-            this.blockReturnedToFlush.clear();
-
-            // Reset counter
-            totalSize.set(0);
-        } finally {
-            writeLock.unlock();
+    public void forceFlush() {
+        FlushData data = extractDataForFlush();
+        if (data.isEmpty()) {
+            return;
         }
 
-        // Perform flush operations outside of lock to minimize lock contention
-        if (!blocksSnapshot.isEmpty()) {
-            flushHandler.flushBlocks(blocksSnapshot);
-        }
-        if (!logsSnapshot.isEmpty()) {
-            flushHandler.flushLogs(logsSnapshot);
-        }
-        if (!blockEnteredSnapshot.isEmpty()) {
-            flushHandler.flushBlockEntered(blockEnteredSnapshot);
-        }
-        if (!blockExitedSnapshot.isEmpty()) {
-            flushHandler.flushBlockExited(blockExitedSnapshot);
-        }
-        if (!blockReturnedSnapshot.isEmpty()) {
-            flushHandler.flushBlockReturned(blockReturnedSnapshot);
-        }
-    }
-
-    private void checkAndFlush() {
-        // Fast check without acquiring lock
-        if (totalSize.get() >= flushSize) {
-            flush();
-        }
-    }
-
-    private long getCurrentTime() {
-        return Instant.now().toEpochMilli();
+        // Flush outside of lock to minimize contention
+        data.flushUsing(flushHandler);
     }
 
     public int getCurrentSize() {
@@ -179,5 +83,93 @@ public class SynchronousBuffer implements VFLBuffer {
 
     public boolean isEmpty() {
         return totalSize.get() == 0;
+    }
+
+    // Private helper methods
+    private void addItem(Runnable addOperation) {
+        lock.writeLock().lock();
+        try {
+            addOperation.run();
+            totalSize.incrementAndGet();
+        } finally {
+            lock.writeLock().unlock();
+        }
+        checkAndFlush();
+    }
+
+    private void checkAndFlush() {
+        if (totalSize.get() >= flushSize) {
+            forceFlush();
+        }
+    }
+
+    private long getCurrentTime() {
+        return Instant.now().toEpochMilli();
+    }
+
+    private FlushData extractDataForFlush() {
+        lock.writeLock().lock();
+        try {
+            if (totalSize.get() == 0) {
+                return FlushData.empty();
+            }
+
+            // Create snapshots and clear originals atomically
+            FlushData data = new FlushData(
+                    new ArrayList<>(logs),
+                    new ArrayList<>(blocks),
+                    new HashMap<>(blockEntered),
+                    new HashMap<>(blockExited),
+                    new HashMap<>(blockReturned)
+            );
+
+            // Clear all collections
+            logs.clear();
+            blocks.clear();
+            blockEntered.clear();
+            blockExited.clear();
+            blockReturned.clear();
+            totalSize.set(0);
+
+            return data;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    // Inner class to encapsulate flush data and operations
+    private static class FlushData {
+        private final List<BlockLog> logs;
+        private final List<Block> blocks;
+        private final Map<String, Long> blockEntered;
+        private final Map<String, Long> blockExited;
+        private final Map<String, Long> blockReturned;
+
+        private FlushData(List<BlockLog> logs, List<Block> blocks,
+                          Map<String, Long> blockEntered, Map<String, Long> blockExited,
+                          Map<String, Long> blockReturned) {
+            this.logs = logs;
+            this.blocks = blocks;
+            this.blockEntered = blockEntered;
+            this.blockExited = blockExited;
+            this.blockReturned = blockReturned;
+        }
+
+        private static FlushData empty() {
+            return new FlushData(List.of(), List.of(), Map.of(), Map.of(), Map.of());
+        }
+
+        private boolean isEmpty() {
+            return logs.isEmpty() && blocks.isEmpty() &&
+                   blockEntered.isEmpty() && blockExited.isEmpty() && blockReturned.isEmpty();
+        }
+
+        private void flushUsing(VFLFlushHandler flushHandler) {
+            if (!blocks.isEmpty()) flushHandler.flushBlocks(blocks);
+            if (!logs.isEmpty()) flushHandler.flushLogs(logs);
+            if (!blockEntered.isEmpty()) flushHandler.flushBlockEntered(blockEntered);
+            if (!blockExited.isEmpty()) flushHandler.flushBlockExited(blockExited);
+            if (!blockReturned.isEmpty()) flushHandler.flushBlockReturned(blockReturned);
+        }
     }
 }

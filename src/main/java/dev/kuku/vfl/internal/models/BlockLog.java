@@ -3,8 +3,6 @@ package dev.kuku.vfl.internal.models;
 import dev.kuku.vfl.internal.models.logType.LogTypeBase;
 import dev.kuku.vfl.internal.models.logType.LogTypeTraceBlock;
 import io.github.robsonkades.uuidv7.UUIDv7;
-import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 
@@ -13,11 +11,19 @@ public class BlockLog {
         return id;
     }
 
-    public @Nullable String getMessage() {
+    public String getBlockId() {
+        return blockId;
+    }
+
+    public String getParentLogId() {
+        return parentLogId;
+    }
+
+    public String getMessage() {
         return message;
     }
 
-    public @Nullable String getReferencedBlockId() {
+    public String getReferencedBlockId() {
         return referencedBlockId;
     }
 
@@ -25,19 +31,19 @@ public class BlockLog {
         return timestamp;
     }
 
-    public String getType() {
-        return type;
+    public String getLogType() {
+        return logType;
     }
 
     private final String id;
     private final String blockId;
-    private final @Nullable String message;
-    private final @Nullable String parentLogId;
-    private final @Nullable String referencedBlockId;
+    private final String message;
+    private final String parentLogId;
+    private final String referencedBlockId;
     private final long timestamp;
-    private final String type;
+    private final String logType;
 
-    public BlockLog(@Nullable String message, String blockId, @Nullable String parentLogId, LogTypeBase type) {
+    public BlockLog(String message, String blockId, String parentLogId, LogTypeBase logType) {
         String id = UUIDv7.randomUUID().toString();
         this.id = id;
         this.blockId = blockId;
@@ -45,10 +51,10 @@ public class BlockLog {
         this.parentLogId = parentLogId;
         this.referencedBlockId = null;
         this.timestamp = Instant.now().toEpochMilli();
-        this.type = type.name();
+        this.logType = logType.name();
     }
 
-    public BlockLog(@Nullable String message, String blockId, @Nullable String parentLogId, @NonNull String referencedBlockId, LogTypeTraceBlock type) {
+    public BlockLog(String message, String blockId, String parentLogId, String referencedBlockId, LogTypeTraceBlock logType) {
         String id = UUIDv7.randomUUID().toString();
         this.blockId = blockId;
         this.id = id;
@@ -56,6 +62,19 @@ public class BlockLog {
         this.message = message;
         this.referencedBlockId = referencedBlockId;
         this.timestamp = Instant.now().toEpochMilli();
-        this.type = type.name();
+        this.logType = logType.name();
+    }
+
+    @Override
+    public String toString() {
+        return "BlockLog{" +
+               "id='" + id + '\'' +
+               ", blockId='" + blockId + '\'' +
+               ", message='" + message + '\'' +
+               ", parentLogId='" + parentLogId + '\'' +
+               ", referencedBlockId='" + referencedBlockId + '\'' +
+               ", timestamp=" + timestamp +
+               ", type='" + logType + '\'' +
+               '}';
     }
 }
