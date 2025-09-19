@@ -233,4 +233,23 @@ public class VFLAnnotation extends VFLBase {
             }
         }
     }
+
+    static class Util {
+        public static BlockContext popLatestContext(boolean clean) {
+            var stack = VFLAnnotation.threadContextStack.get();
+            if (stack == null) return null;
+            if (stack.isEmpty() && clean) {
+                log.debug("[VFL] Empty block context. Removing threadContextStack");
+                VFLAnnotation.threadContextStack.remove();
+                return null;
+            }
+            var ctx = stack.pop();
+            if (stack.isEmpty() && clean) {
+                log.debug("[VFL] Emptied block context after popping ${ctx.getBlock().getId().substring(0,5)}");
+                VFLAnnotation.threadContextStack.remove();
+            }
+            return ctx;
+
+        }
+    }
 }

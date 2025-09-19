@@ -4,6 +4,7 @@ import dev.kuku.vfl.internal.models.Block;
 
 public class BlockContext {
     private final Block block;
+    private String currentLogId = null;
 
     public void setCurrentLogId(String currentLogId) {
         this.currentLogId = currentLogId;
@@ -19,10 +20,13 @@ public class BlockContext {
     }
 
 
-    private String currentLogId = null;
-
     public BlockContext(Block block) {
         this.block = block;
+    }
+
+    public BlockContext(BlockContext existingContext) {
+        this.block = existingContext.block;
+        this.currentLogId = existingContext.currentLogId;
     }
 
     @Override

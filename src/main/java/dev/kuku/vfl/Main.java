@@ -16,6 +16,8 @@ public class Main {
         VFLAnnotation.instrument(buffer);
         //TODO a way to disable certain actions easily, such as NoOp buffer, flushHandler or skipping if byteBuddy is not initialized
         //TODO null pointer safety checks that should not break the code
+        //TODO use a map of blockId and updates for updating block
+        //TODO exception propagation
     }
 
 }

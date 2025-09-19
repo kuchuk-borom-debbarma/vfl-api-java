@@ -8,6 +8,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import services.FlowService;
 
+import java.util.concurrent.ExecutionException;
+
 public class DebugMonolithTests {
 
     @BeforeAll
@@ -39,24 +41,22 @@ public class DebugMonolithTests {
     }
 
     @Test
-    void flat(){
-        System.out.println("====== STARTING FLAT TEST ======");
-        System.out.flush();
-
+    void flat() {
         flowService.flatFlow();
-
-        System.out.println("FLAT FLOW TEST COMPLETE");
     }
 
     @Test
     void linear() {
-        System.out.println("=== STARTING TEST ===");
-        System.out.println("About to call linearFlow()");
-        System.out.flush();
-
         flowService.linearFlow();
+    }
 
-        System.out.println("linearFlow() completed");
-        System.out.println("=== TEST COMPLETE ===");
+    @Test
+    void parallel() throws ExecutionException, InterruptedException {
+        flowService.parallelFlow();
+    }
+
+    @Test
+    void parallelSingleThread() throws ExecutionException, InterruptedException {
+        flowService.parallelFlowButSingleBgThread();
     }
 }
