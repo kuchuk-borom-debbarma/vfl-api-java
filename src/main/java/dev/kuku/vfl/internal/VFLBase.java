@@ -28,9 +28,10 @@ public abstract class VFLBase {
             return;
         }
         String msg = FormatMessage(message, args);
-        BlockLog log = new BlockLog(msg, ctx.getBlock().getId(), ctx.getCurrentLogId(), LogTypeBase.INFO);
-        buffer.pushLog(log);
-        ctx.setCurrentLogId(log.getId());
+        BlockLog l = new BlockLog(msg, ctx.getBlock().getId(), ctx.getCurrentLogId(), LogTypeBase.INFO);
+        log.debug("Created log $l");
+        buffer.pushLog(l);
+        ctx.setCurrentLogId(l.getId());
     }
 
     public void warn(String message, Object... args) {

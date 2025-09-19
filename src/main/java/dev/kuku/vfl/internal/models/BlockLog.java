@@ -11,6 +11,14 @@ public class BlockLog {
         return id;
     }
 
+    public String getBlockId() {
+        return blockId;
+    }
+
+    public String getParentLogId() {
+        return parentLogId;
+    }
+
     public String getMessage() {
         return message;
     }
@@ -23,8 +31,8 @@ public class BlockLog {
         return timestamp;
     }
 
-    public String getType() {
-        return type;
+    public String getLogType() {
+        return logType;
     }
 
     private final String id;
@@ -33,9 +41,9 @@ public class BlockLog {
     private final String parentLogId;
     private final String referencedBlockId;
     private final long timestamp;
-    private final String type;
+    private final String logType;
 
-    public BlockLog(String message, String blockId, String parentLogId, LogTypeBase type) {
+    public BlockLog(String message, String blockId, String parentLogId, LogTypeBase logType) {
         String id = UUIDv7.randomUUID().toString();
         this.id = id;
         this.blockId = blockId;
@@ -43,10 +51,10 @@ public class BlockLog {
         this.parentLogId = parentLogId;
         this.referencedBlockId = null;
         this.timestamp = Instant.now().toEpochMilli();
-        this.type = type.name();
+        this.logType = logType.name();
     }
 
-    public BlockLog(String message, String blockId, String parentLogId,  String referencedBlockId, LogTypeTraceBlock type) {
+    public BlockLog(String message, String blockId, String parentLogId, String referencedBlockId, LogTypeTraceBlock logType) {
         String id = UUIDv7.randomUUID().toString();
         this.blockId = blockId;
         this.id = id;
@@ -54,6 +62,19 @@ public class BlockLog {
         this.message = message;
         this.referencedBlockId = referencedBlockId;
         this.timestamp = Instant.now().toEpochMilli();
-        this.type = type.name();
+        this.logType = logType.name();
+    }
+
+    @Override
+    public String toString() {
+        return "BlockLog{" +
+               "id='" + id + '\'' +
+               ", blockId='" + blockId + '\'' +
+               ", message='" + message + '\'' +
+               ", parentLogId='" + parentLogId + '\'' +
+               ", referencedBlockId='" + referencedBlockId + '\'' +
+               ", timestamp=" + timestamp +
+               ", type='" + logType + '\'' +
+               '}';
     }
 }

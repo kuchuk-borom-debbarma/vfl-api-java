@@ -156,7 +156,6 @@ public class AsynchronousBuffer implements VFLBuffer {
         synchronized (this) {
             finalFlushData = copyContentsAndClear();
         }
-        periodicFlushHandler.close();
         // Submit final flush task if there's data
         if (!finalFlushData.isEmpty()) {
             flushExecutor.submit(() -> flushAll(finalFlushData));

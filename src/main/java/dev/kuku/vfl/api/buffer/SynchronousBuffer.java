@@ -165,8 +165,8 @@ public class SynchronousBuffer implements VFLBuffer {
         }
 
         private void flushUsing(VFLFlushHandler flushHandler) {
-            if (!logs.isEmpty()) flushHandler.flushLogs(logs);
             if (!blocks.isEmpty()) flushHandler.flushBlocks(blocks);
+            if (!logs.isEmpty()) flushHandler.flushLogs(logs);
             if (!blockEntered.isEmpty()) flushHandler.flushBlockEntered(blockEntered);
             if (!blockExited.isEmpty()) flushHandler.flushBlockExited(blockExited);
             if (!blockReturned.isEmpty()) flushHandler.flushBlockReturned(blockReturned);

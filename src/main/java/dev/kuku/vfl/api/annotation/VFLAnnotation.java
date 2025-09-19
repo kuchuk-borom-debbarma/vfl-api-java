@@ -18,13 +18,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.instrument.Instrumentation;
+import java.lang.reflect.Method;
 import java.util.Stack;
 import java.util.function.Function;
 
 public class VFLAnnotation extends VFLBase {
+    static VFLAnnotation INSTANCE = null;
     static final ThreadLocal<Stack<BlockContext>> threadContextStack = new ThreadLocal<>();
     private static final Logger log = LoggerFactory.getLogger(VFLAnnotation.class);
     static VFLBuffer buffer = null;
+
+    private VFLAnnotation() {
+
+    }
 
     @Override
     protected BlockContext getBlockContext() {
@@ -37,7 +43,9 @@ public class VFLAnnotation extends VFLBase {
             log.warn("VFL block stack is empty");
             return null;
         }
-        return stack.peek();
+        var currentStackContext = stack.peek();
+        log.debug("Current stack context: {}", currentStackContext);
+        return currentStackContext;
     }
 
     @Override
@@ -45,7 +53,18 @@ public class VFLAnnotation extends VFLBase {
         return VFLAnnotation.buffer;
     }
 
-    public static synchronized void initialize(VFLBuffer buffer) {
+    public static VFLAnnotation getInstance() {
+        if (INSTANCE == null) {
+            INSTANCE = new VFLAnnotation();
+        }
+        return INSTANCE;
+    }
+
+    public static synchronized void instrument(VFLBuffer buffer) {
+        if (buffer == null) {
+            log.warn("VFL buffer is null. Aborting initialization of VFL Annotation.");
+            return;
+        }
         VFLAnnotation.buffer = buffer;
         try {
             ByteBuddyInitializer.initializeAgent();
@@ -56,8 +75,11 @@ public class VFLAnnotation extends VFLBase {
         }
     }
 
-    public static synchronized void initialize() {
-        VFLAnnotation.initialize(null);
+    /**
+     * VFL Annotation initializer that will skip initialization. Useful for disabling VFL without modifying other part of the codebase
+     */
+    public static synchronized void instrument() {
+        VFLAnnotation.instrument(null);
     }
 
     /**
@@ -131,7 +153,10 @@ public class VFLAnnotation extends VFLBase {
     private static class ByteBuddyInitializer {
         private static void initializeAgent() {
             Instrumentation inst = ByteBuddyAgent.install();
-            AgentBuilder agentBuilder = new AgentBuilder.Default().with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION);
+            AgentBuilder agentBuilder = new AgentBuilder.Default()
+                    .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+                    .with(AgentBuilder.InitializationStrategy.NoOp.INSTANCE)
+                    .with(AgentBuilder.TypeStrategy.Default.REDEFINE);
 
             // Instrument methods annotated with @SubBlock
             agentBuilder = agentBuilder
@@ -167,6 +192,45 @@ public class VFLAnnotation extends VFLBase {
 
             // Install all transformations
             agentBuilder.installOn(inst);
+
+            // Retransform already loaded classes that have our annotations
+            try {
+                Class<?>[] loadedClasses = inst.getAllLoadedClasses();
+                log.debug("[VFL] Checking {} loaded classes for retransformation", loadedClasses.length);
+
+                for (Class<?> loadedClass : loadedClasses) {
+                    if (inst.isModifiableClass(loadedClass) && !loadedClass.isInterface() && !loadedClass.isAnnotation()) {
+                        boolean hasAnnotatedMethods = false;
+
+                        try {
+                            // Check if class has methods with our annotations
+                            for (Method method : loadedClass.getDeclaredMethods()) {
+                                if (method.isAnnotationPresent(RootBlock.class) ||
+                                    method.isAnnotationPresent(SubBlock.class) ||
+                                    method.isAnnotationPresent(RemoteBlock.class) ||
+                                    method.isAnnotationPresent(EventListenerBlock.class)) {
+                                    hasAnnotatedMethods = true;
+                                    log.debug("[VFL] Found annotated method: {}.{}", loadedClass.getSimpleName(), method.getName());
+                                    break;
+                                }
+                            }
+
+                            if (hasAnnotatedMethods) {
+                                log.info("[VFL] Retransforming already loaded class: {}", loadedClass.getName());
+                                inst.retransformClasses(loadedClass);
+                            }
+                        } catch (NoClassDefFoundError | SecurityException e) {
+                            // Skip classes that can't be analyzed due to missing dependencies or security restrictions
+                            log.debug("[VFL] Skipping class {} due to: {}", loadedClass.getName(), e.getMessage());
+                        } catch (Exception e) {
+                            log.warn("[VFL] Error checking class {} for annotations: {}", loadedClass.getName(), e.getMessage());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[VFL] Failed to retransform some classes", e);
+                // Don't rethrow - partial success is better than complete failure
+            }
         }
     }
 }

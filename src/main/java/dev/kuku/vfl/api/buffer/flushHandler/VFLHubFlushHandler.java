@@ -22,6 +22,7 @@ public class VFLHubFlushHandler implements VFLFlushHandler {
     ObjectMapper objectMapper = new ObjectMapper();
 
     public VFLHubFlushHandler(String url) {
+        //TODO remove extra "/" at the end if it exists
         this.url = url;
     }
 
@@ -40,6 +41,7 @@ public class VFLHubFlushHandler implements VFLFlushHandler {
             client.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (InterruptedException | IOException e) {
             // Only log error, do not throw
+            log.error(e.getMessage(), e);
         }
     }
 

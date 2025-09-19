@@ -33,4 +33,14 @@ public class Block {
     public long getCreatedTime() {
         return createdTime;
     }
+
+    @Override
+    public String toString() {
+        return "Block{" +
+               "id='" + id + '\'' +
+               ", parentBlockId='" + parentBlockId + '\'' +
+               ", name='" + name + '\'' +
+               ", createdTime=" + createdTime +
+               '}';
+    }
 }

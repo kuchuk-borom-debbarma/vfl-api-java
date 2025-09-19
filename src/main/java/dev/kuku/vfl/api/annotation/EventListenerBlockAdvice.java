@@ -15,7 +15,7 @@ import java.lang.reflect.Method;
 import java.util.Stack;
 
 public class EventListenerBlockAdvice {
-    private static final EventListenerBlockAdvice instance = new EventListenerBlockAdvice();
+    public static final EventListenerBlockAdvice instance = new EventListenerBlockAdvice();
 
     private EventListenerBlockAdvice() {
     }
@@ -25,12 +25,13 @@ public class EventListenerBlockAdvice {
         instance.entered(origin, args);
     }
 
+    @Advice.OnMethodExit(onThrowable = Throwable.class)
     public static void MethodExit(@Advice.Origin Method origin, @Advice.AllArguments Object[] args, @Advice.Thrown Throwable throwable) {
         instance.exit(origin, args, throwable);
     }
 
     public void entered(Method origin, Object[] args) {
-        Logger log = LoggerFactory.getLogger("${origin.getClass().getSimpleName()}-${origin.getName()}");
+        Logger log = LoggerFactory.getLogger(origin.getDeclaringClass().getSimpleName() + "-" + origin.getName());
         log.info("Entered method: {} with args: {}", origin.getName(), args);
         //Validations
         VFLBuffer buffer = VFLAnnotation.buffer;
@@ -69,8 +70,9 @@ public class EventListenerBlockAdvice {
     }
 
     public void exit(Method method, Object[] args, Throwable throwable) {
-        Logger log = LoggerFactory.getLogger("${method.getClass().getSimpleName()}-${method.getName()}");
-        log.info("Exiting method: ${method.getName()} and throwable: ${throwable.getMessage()}");
+        Logger log = LoggerFactory.getLogger(method.getDeclaringClass().getSimpleName() + "-" + method.getName());
+        log.info("Exiting method: {} and throwable: {}", method.getName(),
+                throwable != null ? throwable.getMessage() : "none");
 
         //Validations
         VFLBuffer buffer = VFLAnnotation.buffer;

@@ -28,6 +28,7 @@ public final class SubBlockAdvice {
         instance.methodEntered(method, args);
     }
 
+    @Advice.OnMethodExit(onThrowable = Throwable.class)
     public static void onSubBlockExited(@Advice.Origin Method method, @Advice.AllArguments Object[] args, @Advice.Thrown Throwable throwable) {
         instance.methodExited(method, args, throwable);
     }
@@ -80,7 +81,7 @@ public final class SubBlockAdvice {
                 log.error("Sub block method exited but buffer is null!");
                 return;
             }
-            BlockLog errorLog = new BlockLog("Exception : ${throwable.getMessage()}", subBlockContext.getBlock().getId(), subBlockContext.getCurrentLogId(), LogTypeBase.ERROR);
+            BlockLog errorLog = new BlockLog("Exception : " + throwable.getMessage(), subBlockContext.getBlock().getId(), subBlockContext.getCurrentLogId(), LogTypeBase.ERROR);
             buffer.pushLog(errorLog);
             //Set the error log as the next step of the current block
             subBlockContext.setCurrentLogId(errorLog.getId());

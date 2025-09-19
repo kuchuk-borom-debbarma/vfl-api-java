@@ -15,7 +15,7 @@ import java.util.Stack;
 
 public class RemoteBlockAdvice {
     //TODO remote block must act as root block with explicit warning (configurable) if it is missing context
-    private static final RemoteBlockAdvice instance = new RemoteBlockAdvice();
+    public static final RemoteBlockAdvice instance = new RemoteBlockAdvice();
 
     private RemoteBlockAdvice() {
 
@@ -26,13 +26,14 @@ public class RemoteBlockAdvice {
         instance.entered(origin, args);
     }
 
+    @Advice.OnMethodExit(onThrowable = Throwable.class)
     public static void MethodExit(@Advice.Origin Method origin, @Advice.AllArguments Object[] args, @Advice.Thrown Throwable throwable) {
         instance.exited(origin, throwable);
     }
 
 
     public void entered(Method method, Object[] args) {
-        Logger log = LoggerFactory.getLogger("${method.getClass().getSimpleName()}-${method.getName()}");
+        Logger log = LoggerFactory.getLogger(method.getDeclaringClass().getSimpleName() + "-" + method.getName());
         log.info("[REMOTE BLOCK] Entered method: {} with args: {}", method.getName(), args);
         //Validations
         VFLBuffer buffer = VFLAnnotation.buffer;
@@ -46,7 +47,7 @@ public class RemoteBlockAdvice {
         for (Object arg : args) {
             if (arg instanceof RemoteBlockWrapper) {
                 remoteBlockWrapper = (RemoteBlockWrapper) arg;
-                log.info("Found PublishContext: {}", remoteBlockWrapper);
+                log.info("Found RemoteBlockWrapper: {}", remoteBlockWrapper);
                 break;
             }
         }
@@ -66,8 +67,9 @@ public class RemoteBlockAdvice {
     }
 
     public void exited(Method method, Throwable throwable) {
-        Logger log = LoggerFactory.getLogger("${method.getClass().getSimpleName()}-${method.getName()}");
-        log.info("[REMOTE BLOCK] Exited method: ${method.getName()} with throwable: ${throwable.getMessage()}");
+        Logger log = LoggerFactory.getLogger(method.getDeclaringClass().getSimpleName() + "-" + method.getName());
+        log.info("[REMOTE BLOCK] Exited method: {} with throwable: {}", method.getName(),
+                throwable != null ? throwable.getMessage() : "none");
         //Validations
         VFLBuffer buffer = VFLAnnotation.buffer;
         if (buffer == null) {
@@ -82,7 +84,7 @@ public class RemoteBlockAdvice {
 
         BlockContext context = stack.pop();
         if (throwable != null) {
-            BlockLog errorLog = new BlockLog("Exception ${throwable.getMessage()}", context.getBlock().getId(), context.getCurrentLogId(), LogTypeBase.ERROR);
+            BlockLog errorLog = new BlockLog("Exception " + throwable.getMessage(), context.getBlock().getId(), context.getCurrentLogId(), LogTypeBase.ERROR);
             buffer.pushLog(errorLog);
             context.setCurrentLogId(errorLog.getId());
         }
