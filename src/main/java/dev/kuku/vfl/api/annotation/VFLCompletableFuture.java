@@ -8,6 +8,7 @@ import dev.kuku.vfl.internal.models.logType.LogTypeTraceBlock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.Stack;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -60,9 +61,10 @@ public class VFLCompletableFuture {
 
                 //5. Push the block and log to buffer
                 if (VFLAnnotation.buffer != null) {
+                    long time = Instant.now().toEpochMilli();
                     VFLAnnotation.buffer.pushBlock(asyncBlock);
                     VFLAnnotation.buffer.pushLog(asyncFireForgetBlockStartLog);
-                    VFLAnnotation.buffer.pushBlockEntered(asyncBlock.getId());
+                    VFLAnnotation.buffer.pushBlockEntered(asyncBlock.getId(), time);
                 }
 
                 //6. Create blockContext for asyncBlock and push it to executor's context stack
@@ -99,9 +101,10 @@ public class VFLCompletableFuture {
                 if (poppedCt == null) {
                     log.error("poppedCt is null");
                 } else {
+                    long time = Instant.now().toEpochMilli();
                     // Complete block lifecycle
-                    VFLAnnotation.buffer.pushBlockExited(poppedCt.getBlock().getId());
-                    VFLAnnotation.buffer.pushBlockReturned(poppedCt.getBlock().getId());
+                    VFLAnnotation.buffer.pushBlockExited(poppedCt.getBlock().getId(), time);
+                    VFLAnnotation.buffer.pushBlockReturned(poppedCt.getBlock().getId(), time);
                 }
             }
         };
@@ -158,7 +161,7 @@ public class VFLCompletableFuture {
                 if (VFLAnnotation.buffer != null) {
                     VFLAnnotation.buffer.pushBlock(asyncBlock);
                     VFLAnnotation.buffer.pushLog(asyncFireForgetBlockStartLog);
-                    VFLAnnotation.buffer.pushBlockEntered(asyncBlock.getId());
+                    VFLAnnotation.buffer.pushBlockEntered(asyncBlock.getId(), Instant.now().toEpochMilli());
                 }
 
                 //6. Create blockContext for asyncBlock and push it to executor's context stack
@@ -213,8 +216,9 @@ public class VFLCompletableFuture {
                     log.error("poppedCt is null");
                 } else {
                     // Complete block lifecycle
-                    VFLAnnotation.buffer.pushBlockExited(poppedCt.getBlock().getId());
-                    VFLAnnotation.buffer.pushBlockReturned(poppedCt.getBlock().getId());
+                    long time = Instant.now().toEpochMilli();
+                    VFLAnnotation.buffer.pushBlockExited(poppedCt.getBlock().getId(), time);
+                    VFLAnnotation.buffer.pushBlockReturned(poppedCt.getBlock().getId(), time);
                 }
             }
         };
@@ -222,48 +226,5 @@ public class VFLCompletableFuture {
         return executor != null ?
                 CompletableFuture.supplyAsync(updatedSupplier, executor) :
                 CompletableFuture.supplyAsync(updatedSupplier);
-    }
-
-    // Utility methods for creating already completed futures with VFL context
-    public static <T> CompletableFuture<T> completedFuture(String blockName, String message, T value) {
-        var ctxStack = VFLAnnotation.threadContextStack.get();
-        if (ctxStack == null || ctxStack.isEmpty()) {
-            log.debug("ctxStack is null or empty. Returning standard completedFuture");
-            return CompletableFuture.completedFuture(value);
-        }
-
-        var ctx = ctxStack.peek();
-        if (ctx == null) {
-            log.debug("ctx is null. Returning standard completedFuture");
-            return CompletableFuture.completedFuture(value);
-        }
-
-        try {
-            // Create a quick block to represent this completed future
-            var completedBlock = new Block(blockName, ctx.getBlock().getId());
-
-            var completedLog = new BlockLog(message + (value != null ? ": " + value : ""),
-                    ctx.getBlock().getId(),
-                    ctx.getCurrentLogId(),
-                    completedBlock.getId(),
-                    LogTypeTraceBlock.TRACE_PARALLEL
-            );
-
-            if (VFLAnnotation.buffer != null) {
-                VFLAnnotation.buffer.pushBlock(completedBlock);
-                VFLAnnotation.buffer.pushLog(completedLog);
-                VFLAnnotation.buffer.pushBlockEntered(completedBlock.getId());
-                VFLAnnotation.buffer.pushBlockExited(completedBlock.getId());
-                VFLAnnotation.buffer.pushBlockReturned(completedBlock.getId());
-            }
-        } catch (Exception e) {
-            log.warn("Error logging completed future: {}", e.getMessage(), e);
-        }
-
-        return CompletableFuture.completedFuture(value);
-    }
-
-    public static CompletableFuture<Void> completedFuture(String blockName, String message) {
-        return completedFuture(blockName, message, null);
     }
 }

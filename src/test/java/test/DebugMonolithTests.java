@@ -28,7 +28,7 @@ public class DebugMonolithTests {
         System.out.println("VFL Instrumentation completed");
 
         // Add delay to ensure instrumentation completes
-        Thread.sleep(5000); //if you have ass PC increase this to ensure everything is transformed
+        Thread.sleep(500); //if you have ass PC increase this to ensure everything is transformed
         System.out.println("=== SETUP COMPLETE ===");
     }
 

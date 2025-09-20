@@ -8,11 +8,12 @@ public interface VFLBuffer {
 
     void pushBlock(Block block);
 
-    void pushBlockReturned(String blockId);
+    void pushBlockEntered(String blockId, long time);
 
-    void pushBlockEntered(String blockId);
+    void pushBlockReturned(String blockId, long time);
 
-    void pushBlockExited(String blockId);
+
+    void pushBlockExited(String blockId, long time);
 
     void forceFlush();
 }

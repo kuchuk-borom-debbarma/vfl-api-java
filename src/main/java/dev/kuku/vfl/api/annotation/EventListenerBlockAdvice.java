@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
+import java.time.Instant;
 import java.util.Stack;
 
 public class EventListenerBlockAdvice {
@@ -55,6 +56,8 @@ public class EventListenerBlockAdvice {
         //Create listener block and push it
         Block eventListenerBlock = new Block(origin.getName(), publishContext.publishedBLock.getId());
         buffer.pushBlock(eventListenerBlock);
+        //Block entered
+        buffer.pushBlockEntered(eventListenerBlock.getId(), Instant.now().toEpochMilli());
         //Create listener block log for publisher to link and push it
         BlockLog eventListenerLog = new BlockLog(null, publishContext.publishedBLock.getId(), null, eventListenerBlock.getId(), LogTypeTraceBlock.LISTEN_EVENT);
         buffer.pushLog(eventListenerLog);
@@ -63,9 +66,6 @@ public class EventListenerBlockAdvice {
             stack = new Stack<>();
             VFLAnnotation.threadContextStack.set(stack);
         }
-        //Block entered
-        buffer.pushBlockEntered(eventListenerBlock.getId());
-
         stack.push(new BlockContext(eventListenerBlock));
     }
 
@@ -94,7 +94,8 @@ public class EventListenerBlockAdvice {
             buffer.pushLog(errorLog);
         }
         //Block finished and returned
-        buffer.pushBlockExited(eventListenerBlock.getId());
-        buffer.pushBlockReturned(eventListenerBlock.getId());
+        long time = Instant.now().toEpochMilli();
+        buffer.pushBlockExited(eventListenerBlock.getId(), time);
+        buffer.pushBlockReturned(eventListenerBlock.getId(), time);
     }
 }

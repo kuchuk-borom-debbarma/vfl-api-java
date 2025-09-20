@@ -7,8 +7,10 @@ import dev.kuku.vfl.internal.models.BlockLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -24,7 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *     <li>Periodic flushing at configured intervals</li>
  *     <li>Force flush with timeout for graceful shutdown</li>
  * </ul>
- *
+ * <p>
  * Thread Safety: This class is thread-safe and designed for concurrent access.
  */
 public class AsynchronousBuffer implements VFLBuffer {
@@ -53,12 +55,12 @@ public class AsynchronousBuffer implements VFLBuffer {
     /**
      * Creates a new AsynchronousBuffer with the specified configuration.
      *
-     * @param bufferSize Maximum number of items to buffer before auto-flush
-     * @param flushIntervalMs Interval between periodic flushes in milliseconds
-     * @param flushTimeoutMs Maximum time to wait for flush operations during force flush
-     * @param flushExecutor Executor service for running flush operations
+     * @param bufferSize             Maximum number of items to buffer before auto-flush
+     * @param flushIntervalMs        Interval between periodic flushes in milliseconds
+     * @param flushTimeoutMs         Maximum time to wait for flush operations during force flush
+     * @param flushExecutor          Executor service for running flush operations
      * @param periodicFlushScheduler Scheduled executor for periodic flushes
-     * @param flushHandler Handler that performs the actual flush operations
+     * @param flushHandler           Handler that performs the actual flush operations
      */
     public AsynchronousBuffer(
             int bufferSize,
@@ -221,27 +223,27 @@ public class AsynchronousBuffer implements VFLBuffer {
     }
 
     @Override
-    public void pushBlockReturned(String blockId) {
+    public void pushBlockReturned(String blockId, long time) {
         synchronized (this) {
-            blockReturned.put(blockId, getCurrentTimestamp());
+            blockReturned.put(blockId, time);
             totalSize++;
         }
         flushIfBufferFull();
     }
 
     @Override
-    public void pushBlockEntered(String blockId) {
+    public void pushBlockEntered(String blockId, long time) {
         synchronized (this) {
-            blockEntered.put(blockId, getCurrentTimestamp());
+            blockEntered.put(blockId, time);
             totalSize++;
         }
         flushIfBufferFull();
     }
 
     @Override
-    public void pushBlockExited(String blockId) {
+    public void pushBlockExited(String blockId, long time) {
         synchronized (this) {
-            blockExited.put(blockId, getCurrentTimestamp());
+            blockExited.put(blockId, time);
             totalSize++;
         }
         flushIfBufferFull();
@@ -300,16 +302,7 @@ public class AsynchronousBuffer implements VFLBuffer {
 
         return true; // All operations completed
     }
-
-    /**
-     * Gets the current timestamp in milliseconds.
-     */
-    private long getCurrentTimestamp() {
-        return Instant.now().toEpochMilli();
-    }
-
-    // Monitoring and debugging methods
-
+    
     /**
      * Returns the number of pending flush operations.
      * Useful for monitoring and testing.

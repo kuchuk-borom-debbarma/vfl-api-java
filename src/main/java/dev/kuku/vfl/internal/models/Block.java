@@ -6,16 +6,19 @@ import io.github.robsonkades.uuidv7.UUIDv7;
 import java.time.Instant;
 
 public class Block {
-    private final String id;
-    private final String parentBlockId;
-    private final String name;
-    private final long createdTime;
+    private String id;
+    private String parentBlockId;
+    private String name;
+    private long createdAt;
 
     public Block(String name, String parentBlockId) {
         this.id = UUIDv7.randomUUID().toString();
         this.parentBlockId = parentBlockId;
         this.name = name;
-        this.createdTime = Instant.now().toEpochMilli();
+        this.createdAt = Instant.now().toEpochMilli();
+    }
+
+    public Block() {
     }
 
     public String getId() {
@@ -30,8 +33,8 @@ public class Block {
         return name;
     }
 
-    public long getCreatedTime() {
-        return createdTime;
+    public long getCreatedAt() {
+        return createdAt;
     }
 
     @Override
@@ -40,7 +43,23 @@ public class Block {
                "id='" + id + '\'' +
                ", parentBlockId='" + parentBlockId + '\'' +
                ", name='" + name + '\'' +
-               ", createdTime=" + createdTime +
+               ", createdTime=" + createdAt +
                '}';
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public void setParentBlockId(String parentBlockId) {
+        this.parentBlockId = parentBlockId;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setCreatedAt(long createdAt) {
+        this.createdAt = createdAt;
     }
 }

@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
+import java.time.Instant;
 import java.util.Stack;
 
 public class RemoteBlockAdvice {
@@ -62,7 +63,7 @@ public class RemoteBlockAdvice {
             VFLAnnotation.threadContextStack.set(stack);
         }
         //Entered the block
-        buffer.pushBlockEntered(remoteBlock.getId());
+        buffer.pushBlockEntered(remoteBlock.getId(), Instant.now().toEpochMilli());
         stack.push(new BlockContext(remoteBlock));
     }
 
@@ -88,6 +89,6 @@ public class RemoteBlockAdvice {
             buffer.pushLog(errorLog);
             context.setCurrentLogId(errorLog.getId());
         }
-        buffer.pushBlockExited(context.getBlock().getId());
+        buffer.pushBlockExited(context.getBlock().getId(), Instant.now().toEpochMilli());
     }
 }

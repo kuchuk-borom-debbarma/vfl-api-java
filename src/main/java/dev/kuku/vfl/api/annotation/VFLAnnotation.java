@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Method;
+import java.time.Instant;
 import java.util.Stack;
 import java.util.function.Function;
 
@@ -106,12 +107,14 @@ public class VFLAnnotation extends VFLBase {
         //Create publish block and push it
         Block publishBlock = new Block(publisherName, currentContext.getBlock().getId());
         localBuffer.pushBlock(publishBlock);
+        localBuffer.pushBlockEntered(publishBlock.getId(), Instant.now().toEpochMilli());
         //Create publish log and push it
         BlockLog publishLog = new BlockLog(msg, currentContext.getBlock().getId(), currentContext.getCurrentLogId(), publishBlock.getId(), LogTypeTraceBlock.PUBLISH_EVENT);
         localBuffer.pushLog(publishLog);
         //Set start and end time for the publish block
-        localBuffer.pushBlockEntered(publishBlock.getId());
-        localBuffer.pushBlockExited(publishBlock.getId());
+        long time = Instant.now().toEpochMilli();
+        localBuffer.pushBlockEntered(publishBlock.getId(), time);
+        localBuffer.pushBlockExited(publishBlock.getId(), time);
         return new PublishContext(publishBlock);
     }
 
@@ -136,16 +139,18 @@ public class VFLAnnotation extends VFLBase {
         localBuffer.pushBlock(remoteBlock);
         BlockLog remoteLog = new BlockLog(message, currentContext.getBlock().getId(), currentContext.getCurrentLogId(), remoteBlock.getId(), LogTypeTraceBlock.TRACE_REMOTE);
         localBuffer.pushLog(remoteLog);
+        currentContext.setCurrentLogId(remoteLog.getId());
         try {
             //block entered and block exited will be handled by the other service using the RemoteBlock annotation
             return fn.apply(new RemoteBlockWrapper(remoteBlock));
         } catch (Exception e) {
             log.error("[VFL] Remote block failed", e);
             BlockLog errorLog = new BlockLog("Exception executing remote block ${e.getMessage()}", currentContext.getBlock().getId(), currentContext.getCurrentLogId(), LogTypeBase.ERROR);
+            buffer.pushLog(errorLog);
             currentContext.setCurrentLogId(errorLog.getId());
             throw e;
         } finally {
-            localBuffer.pushBlockReturned(remoteBlock.getId());
+            localBuffer.pushBlockReturned(remoteBlock.getId(), Instant.now().toEpochMilli());
         }
     }
 

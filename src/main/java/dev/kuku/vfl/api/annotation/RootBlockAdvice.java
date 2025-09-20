@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
+import java.time.Instant;
 import java.util.Stack;
 
 public class RootBlockAdvice {
@@ -21,17 +22,11 @@ public class RootBlockAdvice {
 
     @Advice.OnMethodEnter
     public static void onEnter(@Advice.Origin Method method, @Advice.AllArguments Object[] args) {
-        System.out.println("=== DEBUG: RootBlockAdvice.onEnter called for: " + method.getName() + " ===");
-        System.out.flush();
-        log.debug("Enter RootBlockAdvice.onEnter for method {}-{}",
-                method.getDeclaringClass().getSimpleName(), method.getName());
         INSTANCE.methodEntered(method, args);
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class)
     public static void onExit(@Advice.Origin Method method, @Advice.AllArguments Object[] args, @Advice.Thrown Throwable threw) {
-        System.out.println("=== DEBUG: RootBlockAdvice.onExit called for: " + method.getName() + " ===");
-        System.out.flush();
         INSTANCE.methodExited(method, args, threw);
     }
 
@@ -50,10 +45,12 @@ public class RootBlockAdvice {
             VFLAnnotation.threadContextStack.set(stack);
             logger.debug("Created stack = ${String.valueOf(stack)}");
         }
+        //CreatedAt will be set by constructor
+        long timestamp = Instant.now().toEpochMilli();
         Block rootBlock = new Block(method.getName(), null);
         buffer.pushBlock(rootBlock);
-        // Mark the block as entered
-        buffer.pushBlockEntered(rootBlock.getId());
+        //Set entered time
+        buffer.pushBlockEntered(rootBlock.getId(), timestamp);
         stack.push(new BlockContext(rootBlock));
     }
 
@@ -86,9 +83,9 @@ public class RootBlockAdvice {
             //blockContext.setCurrentLogId(errorLog.getId()); no need to set context anymore, its the last log of the block
             buffer.pushLog(errorLog);
         }
-
-        buffer.pushBlockExited(blockContext.getBlock().getId());
-        buffer.pushBlockReturned(blockContext.getBlock().getId());
+        long time = Instant.now().toEpochMilli();
+        buffer.pushBlockExited(blockContext.getBlock().getId(), time);
+        buffer.pushBlockReturned(blockContext.getBlock().getId(), time);
         buffer.forceFlush();
     }
 }

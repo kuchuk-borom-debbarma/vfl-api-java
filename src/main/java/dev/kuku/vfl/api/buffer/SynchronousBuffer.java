@@ -5,7 +5,6 @@ import dev.kuku.vfl.internal.buffer.flushHandler.VFLFlushHandler;
 import dev.kuku.vfl.internal.models.Block;
 import dev.kuku.vfl.internal.models.BlockLog;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -52,18 +51,18 @@ public class SynchronousBuffer implements VFLBuffer {
     }
 
     @Override
-    public void pushBlockReturned(String blockId) {
-        addItem(() -> blockReturned.put(blockId, getCurrentTime()));
+    public void pushBlockReturned(String blockId, long time) {
+        addItem(() -> blockReturned.put(blockId, time));
     }
 
     @Override
-    public void pushBlockEntered(String blockId) {
-        addItem(() -> blockEntered.put(blockId, getCurrentTime()));
+    public void pushBlockEntered(String blockId, long time) {
+        addItem(() -> blockEntered.put(blockId, time));
     }
 
     @Override
-    public void pushBlockExited(String blockId) {
-        addItem(() -> blockExited.put(blockId, getCurrentTime()));
+    public void pushBlockExited(String blockId, long time) {
+        addItem(() -> blockExited.put(blockId, time));
     }
 
     @Override
@@ -101,10 +100,6 @@ public class SynchronousBuffer implements VFLBuffer {
         if (totalSize.get() >= flushSize) {
             forceFlush();
         }
-    }
-
-    private long getCurrentTime() {
-        return Instant.now().toEpochMilli();
     }
 
     private FlushData extractDataForFlush() {

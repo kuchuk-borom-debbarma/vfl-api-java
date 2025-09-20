@@ -67,7 +67,7 @@ public class FlowService {
                     logger.info("Starting task 1");
                     try {
                         service.square(12);
-                        Thread.sleep(1000);
+                        Thread.sleep(100);
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }
