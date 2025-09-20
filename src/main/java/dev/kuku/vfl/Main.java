@@ -14,13 +14,11 @@ public class Main {
                 50
         );
         VFLAnnotation.instrument(buffer);
-        //TODO do not throw exception if flushing fails
-        //TODO createdAt is 0
+        //TODO config for flush handler. Either to throw exception or fail silently with logging
         //TODO null safeties
         //TODO a way to disable certain actions easily, such as NoOp buffer, flushHandler or skipping if byteBuddy is not initialized
         //TODO null pointer safety checks that should not break the code
         //TODO use a map of blockId and updates for updating block
-        //TODO exception propagation
     }
 
 }
