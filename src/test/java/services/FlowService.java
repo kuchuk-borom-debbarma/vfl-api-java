@@ -89,4 +89,20 @@ public class FlowService {
         task2.get();
         logger.info("Completed parallel flow");
     }
+
+    @RootBlock
+    public void longRunningOperation() {
+        logger.info("Starting long running operation...");
+        int time = 0;
+        while (time < 10){
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            time++;
+            logger.info("Long running operation... {} seconds", time);
+        }
+        logger.info("Completed long running operation");
+    }
 }
