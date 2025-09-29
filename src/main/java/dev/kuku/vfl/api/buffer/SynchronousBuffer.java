@@ -2,6 +2,7 @@ package dev.kuku.vfl.api.buffer;
 
 import dev.kuku.vfl.internal.buffer.VFLBuffer;
 import dev.kuku.vfl.internal.buffer.flushHandler.VFLFlushHandler;
+import dev.kuku.vfl.internal.dto.BlockUpdate;
 import dev.kuku.vfl.internal.models.Block;
 import dev.kuku.vfl.internal.models.BlockLog;
 
@@ -23,9 +24,7 @@ public class SynchronousBuffer implements VFLBuffer {
     // Consolidated data structures
     private final List<BlockLog> logs;
     private final List<Block> blocks;
-    private final Map<String, Long> blockEntered;
-    private final Map<String, Long> blockExited;
-    private final Map<String, Long> blockReturned;
+    private final Map<String, BlockUpdate> blockUpdates;
 
     public SynchronousBuffer(VFLFlushHandler flushHandler, int flushSize) {
         this.flushHandler = flushHandler;
@@ -35,9 +34,7 @@ public class SynchronousBuffer implements VFLBuffer {
         int capacity = Math.max(16, flushSize / 4);
         this.logs = new ArrayList<>(capacity);
         this.blocks = new ArrayList<>(capacity);
-        this.blockEntered = new HashMap<>(capacity);
-        this.blockExited = new HashMap<>(capacity);
-        this.blockReturned = new HashMap<>(capacity);
+        this.blockUpdates = new HashMap<>(capacity);
     }
 
     @Override
@@ -52,17 +49,38 @@ public class SynchronousBuffer implements VFLBuffer {
 
     @Override
     public void pushBlockReturned(String blockId, long time) {
-        addItem(() -> blockReturned.put(blockId, time));
+        addItem(() -> {
+            if (blockUpdates.containsKey(blockId)) {
+                var current = blockUpdates.get(blockId);
+                current.setReturnedAt(time);
+            } else {
+                blockUpdates.put(blockId, new BlockUpdate(null, null, time, null, null));
+            }
+        });
     }
 
     @Override
     public void pushBlockEntered(String blockId, long time) {
-        addItem(() -> blockEntered.put(blockId, time));
+        addItem(() -> {
+            if (blockUpdates.containsKey(blockId)) {
+                var current = blockUpdates.get(blockId);
+                current.setEnteredAt(time);
+            } else {
+                blockUpdates.put(blockId, new BlockUpdate(time, null, null, null, null));
+            }
+        });
     }
 
     @Override
     public void pushBlockExited(String blockId, long time) {
-        addItem(() -> blockExited.put(blockId, time));
+        addItem(() -> {
+            if (blockUpdates.containsKey(blockId)) {
+                var current = blockUpdates.get(blockId);
+                current.setExitedAt(time);
+            } else {
+                blockUpdates.put(blockId, new BlockUpdate(null, time, null, null, null));
+            }
+        });
     }
 
     @Override
@@ -71,7 +89,6 @@ public class SynchronousBuffer implements VFLBuffer {
         if (data.isEmpty()) {
             return;
         }
-
         // Flush outside of lock to minimize contention
         data.flushUsing(flushHandler);
     }
@@ -113,17 +130,13 @@ public class SynchronousBuffer implements VFLBuffer {
             FlushData data = new FlushData(
                     new ArrayList<>(logs),
                     new ArrayList<>(blocks),
-                    new HashMap<>(blockEntered),
-                    new HashMap<>(blockExited),
-                    new HashMap<>(blockReturned)
+                    new HashMap<>(blockUpdates)
             );
 
             // Clear all collections
             logs.clear();
             blocks.clear();
-            blockEntered.clear();
-            blockExited.clear();
-            blockReturned.clear();
+            blockUpdates.clear();
             totalSize.set(0);
 
             return data;
@@ -133,38 +146,21 @@ public class SynchronousBuffer implements VFLBuffer {
     }
 
     // Inner class to encapsulate flush data and operations
-    private static class FlushData {
-        private final List<BlockLog> logs;
-        private final List<Block> blocks;
-        private final Map<String, Long> blockEntered;
-        private final Map<String, Long> blockExited;
-        private final Map<String, Long> blockReturned;
-
-        private FlushData(List<BlockLog> logs, List<Block> blocks,
-                          Map<String, Long> blockEntered, Map<String, Long> blockExited,
-                          Map<String, Long> blockReturned) {
-            this.logs = logs;
-            this.blocks = blocks;
-            this.blockEntered = blockEntered;
-            this.blockExited = blockExited;
-            this.blockReturned = blockReturned;
-        }
+    private record FlushData(List<BlockLog> logs, List<Block> blocks, Map<String, BlockUpdate> blockUpdates) {
 
         private static FlushData empty() {
-            return new FlushData(List.of(), List.of(), Map.of(), Map.of(), Map.of());
+            return new FlushData(List.of(), List.of(), Map.of());
         }
 
         private boolean isEmpty() {
             return logs.isEmpty() && blocks.isEmpty() &&
-                   blockEntered.isEmpty() && blockExited.isEmpty() && blockReturned.isEmpty();
+                   blockUpdates.isEmpty();
         }
 
         private void flushUsing(VFLFlushHandler flushHandler) {
             if (!blocks.isEmpty()) flushHandler.flushBlocks(blocks);
             if (!logs.isEmpty()) flushHandler.flushLogs(logs);
-            if (!blockEntered.isEmpty()) flushHandler.flushBlockEntered(blockEntered);
-            if (!blockExited.isEmpty()) flushHandler.flushBlockExited(blockExited);
-            if (!blockReturned.isEmpty()) flushHandler.flushBlockReturned(blockReturned);
+            if (!blockUpdates.isEmpty()) flushHandler.flushBlockUpdates(blockUpdates);
         }
     }
 }

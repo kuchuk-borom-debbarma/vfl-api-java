@@ -13,8 +13,7 @@ public abstract class VFLBase {
 
     protected abstract BlockContext getBlockContext();
 
-    protected
-    abstract VFLBuffer getVFLBuffer();
+    protected abstract VFLBuffer getVFLBuffer();
 
     public void info(String message, Object... args) {
         BlockContext ctx = getBlockContext();

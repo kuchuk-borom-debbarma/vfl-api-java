@@ -1,24 +1,13 @@
 package dev.kuku.vfl;
 
-import dev.kuku.vfl.api.annotation.VFLAnnotation;
-import dev.kuku.vfl.api.buffer.SynchronousBuffer;
-import dev.kuku.vfl.api.buffer.flushHandler.VFLHubFlushHandler;
-import dev.kuku.vfl.internal.buffer.VFLBuffer;
-
 public class Main {
     public static void main(String[] args) {
-        VFLBuffer buffer = new SynchronousBuffer(
-                new VFLHubFlushHandler(
-                        "http://localhost:8080"
-                ),
-                50
-        );
-        VFLAnnotation.instrument(buffer);
         //TODO config for flush handler. Either to throw exception or fail silently with logging
         //TODO null safeties
         //TODO a way to disable certain actions easily, such as NoOp buffer, flushHandler or skipping if byteBuddy is not initialized
         //TODO null pointer safety checks that should not break the code
-        //TODO use a map of blockId and updates for updating block
+        //TODO class level annotation for sub block
+        //TODO root and remote block both in single annotation
+        //TODO introduce groups
     }
-
 }

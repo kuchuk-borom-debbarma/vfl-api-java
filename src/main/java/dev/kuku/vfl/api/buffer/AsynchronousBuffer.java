@@ -2,6 +2,7 @@ package dev.kuku.vfl.api.buffer;
 
 import dev.kuku.vfl.internal.buffer.VFLBuffer;
 import dev.kuku.vfl.internal.buffer.flushHandler.VFLFlushHandler;
+import dev.kuku.vfl.internal.dto.BlockUpdate;
 import dev.kuku.vfl.internal.models.Block;
 import dev.kuku.vfl.internal.models.BlockLog;
 import org.slf4j.Logger;
@@ -44,9 +45,7 @@ public class AsynchronousBuffer implements VFLBuffer {
     // Buffer state - all access must be synchronized
     private final List<Block> blocks = new ArrayList<>();
     private final List<BlockLog> logs = new ArrayList<>();
-    private final Map<String, Long> blockEntered = new HashMap<>();
-    private final Map<String, Long> blockExited = new HashMap<>();
-    private final Map<String, Long> blockReturned = new HashMap<>();
+    private final Map<String, BlockUpdate> blockUpdates = new HashMap<>();
     private int totalSize = 0;
 
     // Flush operation tracking
@@ -117,9 +116,7 @@ public class AsynchronousBuffer implements VFLBuffer {
         FlushData data = new FlushData(
                 new ArrayList<>(blocks),
                 new ArrayList<>(logs),
-                new HashMap<>(blockEntered),
-                new HashMap<>(blockExited),
-                new HashMap<>(blockReturned)
+                new HashMap<>(blockUpdates)
         );
 
         clearBuffer();
@@ -132,9 +129,7 @@ public class AsynchronousBuffer implements VFLBuffer {
     private void clearBuffer() {
         blocks.clear();
         logs.clear();
-        blockEntered.clear();
-        blockExited.clear();
-        blockReturned.clear();
+        blockUpdates.clear();
         totalSize = 0;
     }
 
@@ -191,14 +186,8 @@ public class AsynchronousBuffer implements VFLBuffer {
         if (!dataToFlush.logs.isEmpty()) {
             flushHandler.flushLogs(dataToFlush.logs);
         }
-        if (!dataToFlush.blockEntered.isEmpty()) {
-            flushHandler.flushBlockEntered(dataToFlush.blockEntered);
-        }
-        if (!dataToFlush.blockExited.isEmpty()) {
-            flushHandler.flushBlockExited(dataToFlush.blockExited);
-        }
-        if (!dataToFlush.blockReturned.isEmpty()) {
-            flushHandler.flushBlockReturned(dataToFlush.blockReturned);
+        if (!dataToFlush.blockUpdates.isEmpty()) {
+            flushHandler.flushBlockUpdates(dataToFlush.blockUpdates);
         }
     }
 
@@ -225,7 +214,12 @@ public class AsynchronousBuffer implements VFLBuffer {
     @Override
     public void pushBlockReturned(String blockId, long time) {
         synchronized (this) {
-            blockReturned.put(blockId, time);
+            if (blockUpdates.containsKey(blockId)) {
+                var current = blockUpdates.get(blockId);
+                current.setReturnedAt(time);
+            } else {
+                blockUpdates.put(blockId, new BlockUpdate(null, null, time, null, null));
+            }
             totalSize++;
         }
         flushIfBufferFull();
@@ -234,7 +228,12 @@ public class AsynchronousBuffer implements VFLBuffer {
     @Override
     public void pushBlockEntered(String blockId, long time) {
         synchronized (this) {
-            blockEntered.put(blockId, time);
+            if (blockUpdates.containsKey(blockId)) {
+                var current = blockUpdates.get(blockId);
+                current.setEnteredAt(time);
+            } else {
+                blockUpdates.put(blockId, new BlockUpdate(time, null, null, null, null));
+            }
             totalSize++;
         }
         flushIfBufferFull();
@@ -243,7 +242,12 @@ public class AsynchronousBuffer implements VFLBuffer {
     @Override
     public void pushBlockExited(String blockId, long time) {
         synchronized (this) {
-            blockExited.put(blockId, time);
+            if (blockUpdates.containsKey(blockId)) {
+                var current = blockUpdates.get(blockId);
+                current.setExitedAt(time);
+            } else {
+                blockUpdates.put(blockId, new BlockUpdate(null, time, null, null, null));
+            }
             totalSize++;
         }
         flushIfBufferFull();
@@ -302,7 +306,7 @@ public class AsynchronousBuffer implements VFLBuffer {
 
         return true; // All operations completed
     }
-    
+
     /**
      * Returns the number of pending flush operations.
      * Useful for monitoring and testing.
@@ -327,31 +331,14 @@ public class AsynchronousBuffer implements VFLBuffer {
      * Immutable data class that holds all buffer contents for flushing.
      * This allows us to pass buffer contents between threads safely.
      */
-    private static class FlushData {
-        private final List<Block> blocks;
-        private final List<BlockLog> logs;
-        private final Map<String, Long> blockEntered;
-        private final Map<String, Long> blockExited;
-        private final Map<String, Long> blockReturned;
-
-        FlushData(List<Block> blocks, List<BlockLog> logs,
-                  Map<String, Long> blockEntered, Map<String, Long> blockExited,
-                  Map<String, Long> blockReturned) {
-            this.blocks = blocks;
-            this.logs = logs;
-            this.blockEntered = blockEntered;
-            this.blockExited = blockExited;
-            this.blockReturned = blockReturned;
-        }
+    private record FlushData(List<Block> blocks, List<BlockLog> logs, Map<String, BlockUpdate> blockUpdates) {
 
         boolean isEmpty() {
-            return blocks.isEmpty() && logs.isEmpty() && blockEntered.isEmpty()
-                   && blockExited.isEmpty() && blockReturned.isEmpty();
+            return blocks.isEmpty() && logs.isEmpty() && blockUpdates.isEmpty();
         }
 
         int getTotalSize() {
-            return blocks.size() + logs.size() + blockEntered.size()
-                   + blockExited.size() + blockReturned.size();
+            return blocks.size() + logs.size() + blockUpdates.size();
         }
     }
 }

@@ -12,7 +12,6 @@ public interface VFLBuffer {
 
     void pushBlockReturned(String blockId, long time);
 
-
     void pushBlockExited(String blockId, long time);
 
     void forceFlush();
