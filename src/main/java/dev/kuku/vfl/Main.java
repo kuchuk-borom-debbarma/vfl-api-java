@@ -9,5 +9,7 @@ public class Main {
         //TODO class level annotation for sub block
         //TODO root and remote block both in single annotation
         //TODO introduce groups
+        //TODO extension method for logging so that users can chain that to slf4j and stuff. Should execute even if vfl is not initialized
+        //TODO exception, debug and trace log type for logger
     }
 }
